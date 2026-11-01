@@ -54,3 +54,23 @@ jobs:
       - name: Publish GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-domain:
+    name: Check custom domain after publish
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect DNS and HTTPS (non-blocking)
+        shell: bash
+        run: |
+          set -u
+          echo 'CNAME record:'
+          dig +short CNAME admin.gooninks.co.id || true
+          echo 'A records:'
+          dig +short A admin.gooninks.co.id || true
+          echo 'HTTPS check:'
+          if curl --silent --show-error --location --head --connect-timeout 6 --max-time 15 --output /dev/null --write-out 'HTTP %{http_code}\n' https://admin.gooninks.co.id/; then
+            echo 'HTTPS endpoint responded'
+          else
+            echo '::warning::HTTPS endpoint is not reachable yet; verify GitHub Pages custom domain, DNS, and certificate'
+          fi
