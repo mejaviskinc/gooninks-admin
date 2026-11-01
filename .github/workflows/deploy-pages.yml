@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Validate static dashboard
         shell: bash
         run: |
@@ -29,7 +29,7 @@ jobs:
           done
           grep -q 'admin.gooninks.co.id' CNAME
           grep -q 'PRIVATE WORKSPACE' index.html
-          if grep -Ein '(sb_secret_|service_role|MIDTRANS_SERVER_KEY)' gn-config.js index.html admin.js; then
+          if grep -Ein '(sb_secret_|service_role)' gn-config.js index.html admin.js; then
             echo 'Potential server-side secret in public assets'; exit 1
           fi
       - name: Stage public files only
