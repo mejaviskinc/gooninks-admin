@@ -104,6 +104,7 @@ loadView=async function(view){await baseLoad(view);$('#newButton').hidden=['arch
 openEditor=function(row=null){
  baseOpen(row);
  if(currentView==='inventory'){
+  if(!row&&$('#field_preorder_lead_days'))$('#field_preorder_lead_days').value='14';
   const f=document.createElement('label');f.className='field';
   f.innerHTML='Unggah foto/video tambahan (bisa pilih beberapa)<input name="gnMultiUpload" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"><small>Foto maksimal 5MB per file; video maksimal 25MB. File lama tidak terhapus otomatis.</small>';
   $('#formFields').append(f);
@@ -129,6 +130,10 @@ $('#editorForm').removeEventListener('submit',baseSave);
 $('#editorForm').addEventListener('submit',async e=>{
  e.preventDefault();const btn=$('#saveButton');btn.disabled=true;
  try{
+  if(currentView==='promotions'){
+   const percent=Number($('#field_discount_percent')?.value||0);
+   if(!Number.isFinite(percent)||percent<0||percent>70)throw Error('Diskon checkout hanya boleh 0 sampai 70%.');
+  }
   if(currentView==='inventory'){
    const uploads=[...e.currentTarget.querySelector('[name="gnMultiUpload"]')?.files||[]];
    if(uploads.length>15)throw Error('Maksimal 15 media per unggahan');
