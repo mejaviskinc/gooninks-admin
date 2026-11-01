@@ -32,7 +32,7 @@ const rowdate=d=>d?new Date(d).toLocaleString('id-ID',{dateStyle:'medium',timeSt
 fetchRows=async function(view){
  if(view==='archived'){const {data,error}=await db.from('gn_inventory').select('*').eq('archived',true).order('updated_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  if(view==='deleted_orders'){const {data,error}=await db.from('gn_orders').select('*').not('deleted_at','is',null).order('deleted_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
- if(view==='customers'){const {data,error}=await db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at').order('created_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
+ if(view==='customers'){const [orders,profiles]=await Promise.all([db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at').order('created_at',{ascending:false}).limit(500),db.from('gn_customer_profiles').select('email,customer_notes,customer_tags').limit(500)]);if(orders.error)throw orders.error;if(profiles.error)throw profiles.error;const p=new Map((profiles.data||[]).map(x=>[String(x.email).toLowerCase(),x]));return (orders.data||[]).map(x=>({...x,_profile:p.get(String(x.customer_email).toLowerCase())||null}))}
  if(view==='account')return [];
  if(view==='orders'){const {data,error}=await db.from('gn_orders').select('*').is('deleted_at',null).order('created_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  return baseFetchRows(view);
@@ -54,13 +54,13 @@ function renderDeletedOrders(){
 function renderCustomers(){
  const m=new Map();
  for(const o of rows){const key=String(o.customer_email||'').toLowerCase().trim();if(!key)continue;
- const prev=m.get(key)||{name:o.customer_name,email:key,phone:o.customer_phone,total:0,orders:0,last:o.created_at};
+ const prev=m.get(key)||{name:o.customer_name,email:key,phone:o.customer_phone,total:0,orders:0,last:o.created_at,customer_notes:o._profile?.customer_notes||'',customer_tags:o._profile?.customer_tags||''};
  prev.orders++;prev.total+=Number(o.amount)||0;m.set(key,prev);
  }
  const data=[...m.values()].filter(x=>JSON.stringify(x).toLowerCase().includes($('#searchBox').value.trim().toLowerCase()));
  $('#rowCounter').textContent=data.length+' pelanggan';
- $('#records').innerHTML=data.length?'<div class="gn-plus-table"><table class="record-table"><thead><tr><th>Pelanggan</th><th>Kontak</th><th>Pesanan</th><th>Total checkout</th><th>Terakhir</th></tr></thead><tbody>'+
- data.map(x=>'<tr><td><strong>'+safe(x.name)+'</strong></td><td>'+safe(x.email)+'<small>'+safe(x.phone||'')+'</small></td><td>'+x.orders+'</td><td>'+rupiah(x.total)+'</td><td>'+rowdate(x.last)+'</td></tr>').join('')+
+ $('#records').innerHTML=data.length?'<div class="gn-plus-table"><table class="record-table"><thead><tr><th>Pelanggan</th><th>Kontak</th><th>Pesanan</th><th>Total checkout</th><th>Terakhir</th><th>Catatan / Segmen</th><th>Aksi</th></tr></thead><tbody>'+
+ data.map(x=>'<tr><td><strong>'+safe(x.name)+'</strong></td><td>'+safe(x.email)+'<small>'+safe(x.phone||'')+'</small></td><td>'+x.orders+'</td><td>'+rupiah(x.total)+'</td><td>'+rowdate(x.last)+'</td><td>'+safe(x.customer_tags||'—')+'<small>'+safe(x.customer_notes||'Belum ada catatan')+'</small></td><td>'+btn('Kelola','data-customer-edit="'+safe(x.email)+'"')+'</td></tr>').join('')+
  '</tbody></table></div>':'<div class="empty">Belum ada data pelanggan dari checkout.</div>';
 }
 function renderAccount(){
@@ -178,6 +178,19 @@ function openOrderDialog(order,action){
  modal.querySelector('[data-close-order]').addEventListener('click',()=>modal.close());
 }
 $('#records').addEventListener('click',async e=>{
+ const c=e.target.closest('[data-customer-edit]');
+ if(c){
+  const email=c.dataset.customerEdit,record=rows.find(x=>String(x.customer_email).toLowerCase()===email);
+  if(!record)return;
+  const tags=prompt('Segmen / label pelanggan (maks. 240 karakter):',record._profile?.customer_tags||'');
+  if(tags===null)return;
+  const notes=prompt('Catatan pelanggan (maks. 2000 karakter):',record._profile?.customer_notes||'');
+  if(notes===null)return;
+  if(tags.length>240||notes.length>2000)return notify('Catatan atau label terlalu panjang',true);
+  const {error}=await db.from('gn_customer_profiles').upsert({email,customer_tags:tags,customer_notes:notes,updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'email'});
+  if(error)return notify(error.message,true);
+  notify('Catatan pelanggan tersimpan');await loadView('customers');return;
+ }
  const archive=e.target.closest('[data-archive-sku],[data-restore-sku]');
  if(archive){const restore=!!archive.dataset.restoreSku;void changeArchive(restore?archive.dataset.restoreSku:archive.dataset.archiveSku,restore);return}
  const act=e.target.closest('[data-order-action]');
