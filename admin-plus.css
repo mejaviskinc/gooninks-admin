@@ -1,0 +1,36 @@
+
+/* GoO Ninks admin extended studio — 2026-11-01 */
+.gn-inventory-thumb{display:block;width:78px;height:94px;object-fit:contain;background:#ede8df;border:1px solid #e3dccf;margin:0 0 9px}
+.gn-order-meta{font-size:11px;color:#7b7b72;white-space:nowrap}
+.gn-edit-marker{background:#eaf0e5;border-left:3px solid #79865a;padding:11px 13px;color:#40543b}
+.gn-plus-actions{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:15px}
+.gn-plus-actions button,.gn-plus-table button{cursor:pointer;border:1px solid #aeb6a6;background:white;color:#304333;padding:10px 14px;border-radius:5px;font-size:12px;font-weight:650}
+.gn-plus-actions .danger{color:#9f4e45;border-color:#d7b4a9}
+.gn-plus-table{width:100%;overflow-x:auto}
+.gn-plus-table td{vertical-align:top;white-space:normal}
+.gn-plus-table td small{display:block;font-size:11px;color:#867e71}
+.gn-plus-card{border:1px solid #dfd9cd;background:#fff;max-width:750px;margin:15px 0 24px;padding:clamp(18px,3vw,34px)}
+.gn-plus-card h3{font:500 26px/1.2 'Playfair Display',Georgia,serif;color:#333128;margin:0 0 17px}
+.gn-plus-card form,.gn-plus-modal form{display:grid;gap:14px}
+.gn-plus-card label,.gn-plus-modal label{display:grid;gap:7px;font-size:12px;font-weight:650;color:#4d5049}
+.gn-plus-card input,.gn-plus-card textarea,.gn-plus-modal input,.gn-plus-modal textarea{
+ width:100%;min-width:0;padding:11px 14px;border-radius:4px;border:1px solid #d6d0c4;background:#fafaf7;font:inherit;color:#282f27
+}
+.gn-plus-card .primary,.gn-plus-modal .primary{justify-self:start}
+.gn-plus-card p,.gn-plus-modal p{font-size:12px;color:#766e61;line-height:1.8}
+.gn-plus-modal{padding:0;border:0;border-radius:9px;box-shadow:0 20px 80px #1117;width:min(560px,calc(100% - 25px));max-height:85dvh;overflow:auto}
+.gn-plus-modal form{padding:clamp(19px,4vw,36px)}
+.gn-plus-modal h3{font:500 27px 'Playfair Display',Georgia,serif;margin:0}
+.gn-plus-modal::backdrop{background:rgba(20,24,20,.65)}
+.gn-plus-warning{background:#faf4e6;border-left:3px solid #c4a16b;padding:11px}
+.gn-notif-wrap{position:relative}
+.gn-notif-bell{display:flex;align-items:center;gap:5px;min-height:42px;background:#fff;border:1px solid #ddd8ca;border-radius:5px;padding:9px 11px;cursor:pointer;font-size:18px}
+.gn-notif-bell span{display:grid;place-items:center;min-width:18px;min-height:18px;border-radius:99px;background:#ab8462;color:white;font:700 10px/1 system-ui;padding:2px 4px}
+.gn-notif-pop{position:absolute;z-index:250;top:calc(100% + 8px);right:0;width:min(350px,90vw);max-height:400px;overflow-y:auto;border:1px solid #e2dacb;background:#fff;box-shadow:0 15px 45px #15181322;padding:16px}
+.gn-notif-pop h3{font:500 23px 'Playfair Display',Georgia,serif;margin:0 0 8px}
+.gn-notif-pop p{font-size:12px;line-height:1.5;margin:0;padding:11px 4px;border-bottom:1px solid #eeeee6}
+.gn-notif-pop small{display:block;color:#8b867b;padding-top:3px}
+#formFields .field:has([name=gnMultiUpload]),#formFields .field:has([name=gnAdUpload]){border:1px dashed #beb29e;background:#f9f6ef;padding:13px}
+#formFields .field small{font-size:11px;color:#807969;line-height:1.6}
+@media(max-width:900px){.gn-order-card summary{grid-template-columns:1fr 1fr}.gn-order-meta{white-space:normal}.gn-notif-pop{right:-45px}}
+@media(max-width:600px){.gn-plus-actions button{flex:1 1 130px}.gn-notif-pop{right:-45px}.gn-order-card summary{grid-template-columns:1fr 1fr;gap:10px}}
