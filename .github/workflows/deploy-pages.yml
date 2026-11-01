@@ -1,0 +1,56 @@
+name: Deploy GoO Ninks Admin to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Validate static dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in index.html admin.js admin.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME; do
+            test -s "$f" || { echo "Missing: $f"; exit 1; }
+          done
+          grep -q 'admin.gooninks.co.id' CNAME
+          grep -q 'PRIVATE WORKSPACE' index.html
+          if grep -Ein '(sb_secret_|service_role|MIDTRANS_SERVER_KEY)' gn-config.js index.html admin.js; then
+            echo 'Potential server-side secret in public assets'; exit 1
+          fi
+      - name: Stage public files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp index.html admin.js admin.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME robots.txt .nojekyll _site/
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload static Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./_site
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Publish GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
