@@ -87,7 +87,7 @@ function decorateOrders(){
   if(o.edited_at){const ed=document.createElement('p');ed.className='gn-edit-marker';ed.textContent='✎ Diedit '+rowdate(o.edited_at)+' • '+(o.edit_reason||'');body.append(ed)}
   const actions=document.createElement('div');actions.className='gn-plus-actions';
   actions.innerHTML=btn('Edit data penerima','data-order-action="edit" data-order-id="'+safe(id)+'"')+
-   btn('Hapus pesanan','data-order-action="soft_delete" data-order-id="'+safe(id)+'"','danger');
+   btn('Hapus pesanan','data-order-action="soft_delete" data-order-id="'+safe(id)+'"','danger')+btn('Cetak rincian / PDF','data-print-order="'+safe(id)+'"');
   body.append(actions);
  });
 }
@@ -197,6 +197,33 @@ $('#records').addEventListener('click',async e=>{
  if(act){const o=rows.find(x=>x.order_id===act.dataset.orderId);if(o)openOrderDialog(o,act.dataset.orderAction);return}
  const view=e.target.closest('[data-go-view]');if(view){void loadView(view.dataset.goView)}
 });
+
+/* Print a factual order summary; browser print allows Save as PDF. Do not label it as a tax invoice. */
+function printOrderDetails(order){
+ const popup=window.open('','_blank','width=860,height=900');
+ if(!popup){notify('Pop-up diblokir browser. Izinkan pop-up untuk mencetak pesanan.',true);return}
+ try{popup.opener=null}catch{}
+ const items=Array.isArray(order.items)?order.items:[];
+ const itemRows=items.map(item=>'<tr><td>'+safe(item.name||item.sku||'Produk')+'</td><td>'+safe(item.sku||'—')+'</td><td style="text-align:right">'+safe(item.qty||0)+'</td><td style="text-align:right">'+rupiah(item.price)+'</td><td style="text-align:right">'+rupiah((Number(item.price)||0)*(Number(item.qty)||0))+'</td></tr>').join('');
+ const html='<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Rincian '+safe(order.order_id)+'</title>'+
+ '<style>body{font:14px/1.55 Arial,sans-serif;color:#1c1c1c;max-width:780px;margin:30px auto;padding:0 20px}h1{font-size:24px;margin-bottom:4px}small{color:#666}table{border-collapse:collapse;width:100%;margin-top:22px}th,td{border-bottom:1px solid #ddd;padding:10px 6px;text-align:left}th{background:#f5f4f1}section{margin-top:20px}.total{font-size:20px;font-weight:bold;text-align:right}.warning{padding:12px;background:#f3eee4;margin-top:20px}@media print{body{margin:0 auto}.warning{background:#eee!important;print-color-adjust:exact}}</style></head><body>'+
+ '<h1>GoO ninks</h1><small>Ringkasan pesanan — bukan faktur pajak</small><hr>'+
+ '<p><b>Nomor:</b> '+safe(order.order_id)+'<br><b>Dibuat:</b> '+rowdate(order.created_at)+'<br><b>Status pembayaran:</b> '+safe(order.status)+'<br><b>Metode:</b> '+safe(order.payment_type||'Belum tersedia')+'</p>'+
+ '<section><b>Penerima</b><p>'+safe(order.customer_name)+'<br>'+safe(order.customer_email)+'<br>'+safe(order.customer_phone)+'<br>'+safe(order.customer_address)+'</p></section>'+
+ '<table><thead><tr><th>Produk</th><th>SKU</th><th>Qty</th><th>Harga</th><th>Subtotal</th></tr></thead><tbody>'+itemRows+'</tbody></table>'+
+ '<p class="total">Total pesanan: '+rupiah(order.amount)+'</p>'+
+ '<div class="warning">Dokumen ini bukan bukti pembayaran. Status lunas hanya sah setelah diverifikasi oleh Midtrans. Biaya pengiriman yang disepakati terpisah tidak termasuk jika belum tercatat dalam pesanan.</div>'+
+ '</body></html>';
+ popup.document.open();popup.document.write(html);popup.document.close();
+ popup.addEventListener('load',()=>popup.print(),{once:true});
+}
+$('#records').addEventListener('click',e=>{
+ const print=e.target.closest('[data-print-order]');
+ if(!print)return;
+ const order=rows.find(x=>x.order_id===print.dataset.printOrder);
+ if(order)printOrderDetails(order);
+});
+
 $('#records').addEventListener('submit',async e=>{
  if(e.target.id==='gnEmailForm'||e.target.id==='gnPasswordForm'){
   e.preventDefault();const d=new FormData(e.target),password=String(d.get('password')||'');
