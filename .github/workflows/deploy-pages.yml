@@ -24,7 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for f in index.html admin.js admin.css admin-plus.js admin-plus.css admin-reports.js admin-reports.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME; do
+          for f in index.html admin.js admin.css admin-plus.js admin-plus.css admin-reports.js admin-reports.css admin-tracking.js admin-tracking.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME; do
             test -s "$f" || { echo "Missing: $f"; exit 1; }
           done
           grep -q 'admin.gooninks.co.id' CNAME
@@ -32,10 +32,13 @@ jobs:
           node --check admin.js
           node --check admin-plus.js
           node --check admin-reports.js
+          node --check admin-tracking.js
           grep -q 'admin-plus.js' index.html
           grep -q 'admin-reports.js' index.html
           grep -q 'admin-reports.css' index.html
-          if grep -Ein '(sb_secret_|service_role)' gn-config.js index.html admin.js admin-plus.js admin-reports.js; then
+          grep -q 'admin-tracking.js' index.html
+          grep -q 'admin-tracking.css' index.html
+          if grep -Ein '(sb_secret_|service_role)' gn-config.js index.html admin.js admin-plus.js admin-reports.js admin-tracking.js; then
             echo 'Potential server-side secret in public assets'; exit 1
           fi
       - name: Stage public files only
@@ -43,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site
-          cp index.html admin.js admin.css admin-plus.js admin-plus.css admin-reports.js admin-reports.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME robots.txt .nojekyll _site/
+          cp index.html admin.js admin.css admin-plus.js admin-plus.css admin-reports.js admin-reports.css admin-tracking.js admin-tracking.css gn-config.js brand-loader.css brand-loader.js favicon.svg logo-gooninks.svg gooninks-admin-logo.png CNAME robots.txt .nojekyll _site/
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload static Pages artifact
