@@ -279,7 +279,7 @@ async function updateShipping(form){
   });
   if(error)throw error;
   notify('Status pengiriman berhasil diperbarui');
-  await loadView('shipping');
+  await loadView(currentView==='tracking'?'tracking':'shipping');
  }catch(e){notify('Pengiriman: '+(e.message||'Gagal memperbarui'),true)}
  finally{button.disabled=false}
 }
@@ -334,7 +334,7 @@ let orderChannel=null,orderRefreshTimer=null,orderFallbackTimer=null,orderRefres
 async function refreshOrderView(){
  if(!currentUser||document.hidden)return;
  if(loading||orderRefreshBusy){queueOrderRefresh();return}
- if(!['orders','shipping','leads','overview'].includes(currentView))return;
+ if(!['orders','shipping','tracking','leads','overview'].includes(currentView))return;
  // Avoid replacing a shipping form while an administrator is editing it.
  if($('#editorDialog')?.open||document.activeElement?.closest('[data-shipping-form]'))return;
  orderRefreshBusy=true;const view=currentView;
