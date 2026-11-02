@@ -1,0 +1,23 @@
+.gn-tracking-admin-actions{border-top:1px solid #e6e5df;margin-top:18px;padding-top:17px}
+.gn-tracking-admin-actions h4{font-size:15px;margin:0 0 7px}
+.gn-tracking-admin-actions p{font-size:12px;line-height:1.6;color:#5f675e;margin:5px 0 12px}
+.gn-tracking-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.gn-tracking-buttons button,.gn-tracking-share button{font-size:12px;padding:9px 12px;border-radius:8px;border:1px solid #c9cec3;background:#f8f9f6;color:#304232;cursor:pointer}
+.gn-tracking-buttons button:disabled{opacity:.5;cursor:not-allowed}
+.gn-tracking-admin-output{margin-top:15px;font-size:12px}
+.gn-tracking-share{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.gn-tracking-share input{flex:1 1 230px;min-width:0;padding:10px;border:1px solid #d6d8d0;border-radius:8px;font-size:12px}
+.gn-tracking-share a{padding:10px 12px;border-radius:8px;background:#344734;color:white;text-decoration:none;font-size:12px}
+.gn-tracking-timeline{margin:12px 0 5px;padding-left:23px;border-left:2px solid #d3ddce;list-style:none}
+.gn-tracking-timeline li{position:relative;padding:0 0 16px}
+.gn-tracking-timeline li::before{content:"";position:absolute;left:-29px;top:4px;width:9px;height:9px;border-radius:50%;background:#55724d;border:2px solid white}
+.gn-tracking-timeline strong{font-size:13px}
+.gn-tracking-timeline p{margin:5px 0}
+.gn-tracking-timeline small{color:#8a8e85}
+.gn-tracking-dialog{border:1px solid #d8dcd4;border-radius:15px;max-width:520px;width:min(90vw,520px);padding:25px;background:white;color:#283327}
+.gn-tracking-dialog::backdrop{background:#1d281c85}
+.gn-tracking-dialog h2{margin:0 0 12px;font:500 25px Georgia,serif}
+.gn-tracking-dialog label{display:grid;gap:10px;font-size:13px;margin:15px 0}
+.gn-tracking-dialog textarea{width:100%;min-height:115px;border:1px solid #cbd0c5;border-radius:8px;padding:12px;font:inherit}
+.gn-tracking-dialog .gn-track-hint{font-size:12px;color:#767e73;line-height:1.6}
+@media(max-width:700px){.gn-tracking-buttons{display:grid;grid-template-columns:1fr}.gn-tracking-share a,.gn-tracking-share button{width:100%;text-align:center}}
