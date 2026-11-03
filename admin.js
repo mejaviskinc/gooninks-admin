@@ -23,6 +23,46 @@ let db=null,currentUser=null,currentRole=null,currentView='overview',rows=[],tea
 function notify(s,isError=false){const t=$('#toast');t.textContent=s;t.style.background=isError?'#9f4e45':'#28372b';t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3500)}
 function setAlert(message){const a=$('#loginError');a.hidden=!message;a.textContent=message||''}
 function setInfo(message){const a=$('#authInfo');a.hidden=!message;a.textContent=message||''}
+
+/* Cloudflare Turnstile is opt-in until a sitekey is set. Supabase Auth must
+   independently verify the token (Auth > Bot and Abuse Protection). */
+const captchaSiteKey=String(cfg?.turnstileSiteKey||'').trim();
+const captchaWidgets=new Map();
+const captchaForms={login:'loginForm',signup:'signupForm',forgot:'forgotForm'};
+function renderCaptchaFor(mode){
+ if(!captchaSiteKey||!window.turnstile||!captchaForms[mode])return;
+ const formId=captchaForms[mode],form=document.getElementById(formId);
+ if(!form||captchaWidgets.has(formId))return;
+ const slot=form.querySelector('[data-turnstile-slot]');
+ if(!slot)return;
+ slot.hidden=false;
+ try{
+  const widgetId=window.turnstile.render(slot,{sitekey:captchaSiteKey,theme:'auto'});
+  captchaWidgets.set(formId,widgetId);
+ }catch(error){console.warn('Turnstile render:',error instanceof Error?error.message:'Unavailable')}
+}
+function initTurnstile(){
+ if(!captchaSiteKey)return;
+ const script=document.createElement('script');
+ script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+ script.async=true;
+ script.onload=()=>renderCaptchaFor($('#signupForm').hidden?($('#forgotForm').hidden?'login':'forgot'):'signup');
+ script.onerror=()=>setAlert('Verifikasi keamanan Cloudflare gagal dimuat. Periksa koneksi atau coba muat ulang.');
+ document.head.appendChild(script);
+}
+function getCaptchaToken(formId){
+ if(!captchaSiteKey)return undefined;
+ const widgetId=captchaWidgets.get(formId);
+ if(widgetId===undefined||!window.turnstile)throw Error('Verifikasi Cloudflare belum siap. Muat ulang halaman dan coba lagi.');
+ const token=window.turnstile.getResponse(widgetId);
+ if(!token)throw Error('Mohon selesaikan verifikasi keamanan Cloudflare terlebih dahulu.');
+ return token;
+}
+function resetCaptcha(formId){
+ if(!captchaSiteKey||!window.turnstile)return;
+ const widgetId=captchaWidgets.get(formId);
+ if(widgetId!==undefined)window.turnstile.reset(widgetId);
+}
 function switchAuth(mode){
  const signing=mode==='signup',logging=mode==='login';
  const other=mode==='forgot'||mode==='recovery';
@@ -36,6 +76,7 @@ function switchAuth(mode){
  $('#showSignup').setAttribute('aria-selected',String(signing));
  $('#showLogin').setAttribute('aria-selected',String(logging));
  setAlert('');setInfo('');
+ renderCaptchaFor(mode);
 }
 async function getStaff(user){if(!user)return null;const {data,error}=await db.from('gn_admins').select('role').eq('user_id',user.id).maybeSingle();if(error)throw error;return data}
 async function activate(user){const staff=await getStaff(user);if(!staff){await db.auth.signOut();throw Error('Akun telah terdaftar tetapi belum disetujui sebagai admin. Pastikan email sudah diverifikasi, lalu minta persetujuan pemilik GoO Ninks.')}currentUser=user;currentRole=staff.role;$('#teamNav').hidden=currentRole!=='owner';$('#accountEmail').textContent=user.email||'';$('#authScreen').hidden=true;$('#appShell').hidden=false;setAlert('');setInfo('');await loadView('overview');startOrderRealtime()}
@@ -61,7 +102,7 @@ async function boot(){
   }
  }catch(e){setAlert(e.message);$('#authScreen').hidden=false;$('#appShell').hidden=true}
 }
-async function login(e){e.preventDefault();const b=$('#loginButton');b.disabled=true;setAlert('');try{if(!db)throw Error('Koneksi database belum siap');const form=new FormData(e.currentTarget);const {data,error}=await db.auth.signInWithPassword({email:String(form.get('email')).trim(),password:String(form.get('password'))});if(error)throw error;await activate(data.user);e.currentTarget.reset()}catch(err){const message=err?.message||'Login gagal';setAlert(/invalid login credentials/i.test(message)?'Email atau kata sandi tidak cocok. Periksa email akun Anda, atau pilih Lupa kata sandi untuk membuat yang baru.':message);notify('Login gagal',true)}finally{b.disabled=false}}
+async function login(e){e.preventDefault();const b=$('#loginButton');b.disabled=true;setAlert('');try{if(!db)throw Error('Koneksi database belum siap');const form=new FormData(e.currentTarget);const captchaToken=getCaptchaToken('loginForm');const {data,error}=await db.auth.signInWithPassword({email:String(form.get('email')).trim(),password:String(form.get('password')),...(captchaToken?{options:{captchaToken}}:{})});if(error)throw error;await activate(data.user);e.currentTarget.reset()}catch(err){const message=err?.message||'Login gagal';setAlert(/invalid login credentials/i.test(message)?'Email atau kata sandi tidak cocok. Periksa email akun Anda, atau pilih Lupa kata sandi untuk membuat yang baru.':message);notify('Login gagal',true)}finally{resetCaptcha('loginForm');b.disabled=false}}
 
 
 async function requestPasswordReset(e){
@@ -70,11 +111,12 @@ async function requestPasswordReset(e){
  try{
   if(!db)throw Error('Koneksi Supabase belum tersedia. Muat ulang halaman.');
   const email=String(new FormData(e.currentTarget).get('email')||'').trim().toLowerCase();
-  const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:'https://admin.gooninks.co.id/'});
+  const captchaToken=getCaptchaToken('forgotForm');
+   const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:'https://admin.gooninks.co.id/',...(captchaToken?{captchaToken}:{})});
   if(error)throw error;
   setInfo('Jika alamat email tersebut terdaftar, tautan pemulihan telah dikirim. Periksa kotak masuk atau spam. Buka tautan dari perangkat yang sama jika memungkinkan.');
  }catch(err){setAlert(err?.message||'Tidak dapat mengirim tautan pemulihan.')}
- finally{button.disabled=false}
+ finally{resetCaptcha('forgotForm');button.disabled=false}
 }
 async function saveNewPassword(e){
  e.preventDefault();
@@ -109,13 +151,14 @@ async function signup(e){
   if(name.length<2||name.length>100)throw Error('Masukkan nama lengkap yang valid.');
   if(password.length<12||!/[a-zA-Z]/.test(password)||!/[0-9]/.test(password))throw Error('Kata sandi minimal 12 karakter serta mengandung huruf dan angka.');
   if(password!==fields.get('confirm_password'))throw Error('Konfirmasi kata sandi tidak sama.');
-  const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:'https://admin.gooninks.co.id/',data:{display_name:name}}});
+  const captchaToken=getCaptchaToken('signupForm');
+   const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:'https://admin.gooninks.co.id/',data:{display_name:name},...(captchaToken?{captchaToken}:{})}});
   if(error)throw error;
   e.currentTarget.reset();
   switchAuth('login');
   setInfo('Permintaan pendaftaran diterima. Cek kotak masuk atau spam untuk verifikasi email, kemudian masuk. Akun staf membutuhkan persetujuan pemilik.');
   if(data?.session){try{await activate(data.user)}catch(err){setInfo(err.message);}}
- }catch(err){setAlert(err?.message||'Pendaftaran gagal. Coba kembali.')}finally{submit.disabled=false}
+ }catch(err){setAlert(err?.message||'Pendaftaran gagal. Coba kembali.')}finally{resetCaptcha('signupForm');submit.disabled=false}
 }
 async function loadTeam(){
  if(currentRole!=='owner')throw Error('Hanya pemilik yang dapat mengelola akun.');
@@ -369,4 +412,4 @@ function startOrderRealtime(){
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)queueOrderRefresh()});
 window.addEventListener('online',queueOrderRefresh);
 
-events();boot();
+events();initTurnstile();boot();
