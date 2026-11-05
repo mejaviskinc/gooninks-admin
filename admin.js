@@ -190,13 +190,11 @@ async function changeTeam(userId,approve){
 async function logout(){stopOrderRealtime();if(db)await db.auth.signOut();currentUser=null;currentRole=null;rows=[];teamRows=[];$('#appShell').hidden=true;$('#authScreen').hidden=false;setMobileMenu(false);switchAuth('login')}
 async function fetchRows(view){
  if(view==='shipping'){
-  const [ship,orders]=await Promise.all([
-   db.from('gn_shipments').select('*').order('updated_at',{ascending:false}).limit(500),
-   db.from('gn_orders').select('order_id,customer_name,customer_email,customer_phone,customer_address,amount,items,status,paid_at,created_at').order('created_at',{ascending:false}).limit(500)
-  ]);
-  if(ship.error)throw ship.error;if(orders.error)throw orders.error;
-  const mapping=new Map((orders.data||[]).map(x=>[x.order_id,x]));
-  return (ship.data||[]).map(row=>({...row,_order:mapping.get(row.order_id)||null}));
+  const {data,error}=await db.from('gn_shipments')
+   .select('*,_order:gn_orders!inner(order_id,customer_name,customer_email,customer_phone,customer_address,amount,items,status,paid_at,created_at)')
+   .eq('_order.status','paid').is('_order.deleted_at',null)
+   .order('updated_at',{ascending:false}).limit(500);
+  if(error)throw error;return data||[];
  }
  const schema=schemas[view];const {data,error}=await db.from(schema.table).select('*').order('created_at',{ascending:false}).limit(500);if(error)throw error;return data||[]
 }
@@ -277,12 +275,12 @@ function renderOrderQueue(data){
   '<details class="gn-order-card"><summary><span class="gn-order-number">'+safe(o.order_id)+'</span><span>'+safe(o.customer_name)+'</span><span>'+rupiah(o.amount)+'</span>'+pill(o.status,o.status==='paid')+'<span class="gn-order-more">Detail ▾</span></summary>'+
   '<div class="gn-order-body"><div><h4>Data penerima</h4>'+orderContact(o)+'<p><b>Alamat lengkap</b><span>'+safe(o.customer_address)+'</span></p></div>'+
   '<div><h4>Rincian produk</h4><p>'+checkoutItems(o.items)+'</p><p>Dibuat: '+dateText(o.created_at)+'</p><p>Status pembayaran: '+safe(o.status)+'</p>'+
-  '<button type="button" data-go-shipping="'+safe(o.order_id)+'">Buka proses pengiriman ↗</button></div></div></details>'
+  (o.status==='paid'?'<button type="button" data-go-shipping="'+safe(o.order_id)+'">Buka pengiriman & pelacakan ↗</button>':'<p class="gn-shipping-notice">Pengiriman tersedia setelah pembayaran terverifikasi lunas.</p>')+'</div></div></details>'
  ).join('')+'</div>';
 }
 function renderShippingQueue(data){
  const root=$('#records');
- if(!data.length){root.innerHTML='<div class="empty"><strong>Belum ada antrean pengiriman</strong>Antrean otomatis dibuat ketika pelanggan berhasil mengirim checkout Midtrans.</div>';return}
+ if(!data.length){root.innerHTML='<div class="empty"><strong>Belum ada antrean pengiriman</strong>Hanya transaksi yang pembayarannya terverifikasi lunas muncul di sini. Pesanan menunggu pembayaran tetap ada di tab Pesanan.</div>';return}
  const counts={};for(const x of data)counts[x.status]=(counts[x.status]||0)+1;
  const summary=['awaiting_payment','ready_to_pack','packing','ready_to_ship','shipped','delivered','cancelled','review']
  .filter(x=>counts[x]).map(x=>'<span class="gn-ship-summary">'+safe(SHIP_LABELS[x])+' <b>'+counts[x]+'</b></span>').join('');
@@ -299,7 +297,7 @@ function renderShippingQueue(data){
     '<h4>Produk yang dipesan</h4><p>'+checkoutItems(o?.items)+'</p></div>'+
     '<div><h4>Pembayaran & pengiriman</h4><p>Midtrans: '+safe(o?.status||'Belum tersedia')+'</p>'+
     '<p>Tahap: <b>'+safe(stepLabel)+'</b></p>'+delivery+
-    (!canUpdate?'<p class="gn-ship-warning">'+(o?.status==='paid'?'Tahap ini tidak dapat dilanjutkan.':'Jangan dikemas atau dikirim sebelum pembayaran terverifikasi lunas.')+'</p>':
+    (!canUpdate?'<p class="gn-ship-warning">'+(o?.status==='paid'?(x.status==='delivered'?'Pengiriman selesai. Paket telah diterima pelanggan.':'Tahap ini tidak dapat dilanjutkan.'):'Jangan dikemas atau dikirim sebelum pembayaran terverifikasi lunas.')+'</p>':
     '<form data-shipping-form="'+safe(x.order_id)+'" class="gn-shipment-editor">'+
     '<input type="hidden" name="status" value="'+safe(next)+'">'+
     '<label>Kurir / ekspedisi<input name="carrier" maxlength="100" value="'+safe(x.carrier||'')+'" placeholder="Contoh: JNE, J&T, SiCepat" '+(next==='shipped'||next==='delivered'?'required':'')+'></label>'+
@@ -365,7 +363,7 @@ function events(){
  $('#newButton').addEventListener('click',()=>openEditor());
  $('#searchBox').addEventListener('input',()=>currentView==='team'?renderTeam():renderTable());
  $('#records').addEventListener('submit',e=>{const form=e.target.closest('[data-shipping-form]');if(form){e.preventDefault();void updateShipping(form)}});
- $('#records').addEventListener('click',e=>{const edit=e.target.closest('[data-edit]');const del=e.target.closest('[data-delete]');if(currentView==='team'){const approve=e.target.closest('[data-approve]');const revoke=e.target.closest('[data-revoke]');if(approve)changeTeam(approve.dataset.approve,true);if(revoke)changeTeam(revoke.dataset.revoke,false);return}const jump=e.target.closest('[data-go-shipping]');if(jump){void loadView('shipping');return}if(currentView==='shipping'||currentView==='orders')return;const schema=schemas[currentView];if(edit){const r=rows.find(x=>String(x[schema.key])===edit.dataset.edit);if(r)openEditor(r)}else if(del)eraseRow(del.dataset.delete)});
+ $('#records').addEventListener('click',e=>{const edit=e.target.closest('[data-edit]');const del=e.target.closest('[data-delete]');if(currentView==='team'){const approve=e.target.closest('[data-approve]');const revoke=e.target.closest('[data-revoke]');if(approve)changeTeam(approve.dataset.approve,true);if(revoke)changeTeam(revoke.dataset.revoke,false);return}const jump=e.target.closest('[data-go-shipping]');if(jump){void (async()=>{await loadView('shipping');const card=[...document.querySelectorAll('#records .gn-order-card')].find(c=>c.querySelector('.gn-order-number')?.textContent===jump.dataset.goShipping);if(card){card.open=true;card.scrollIntoView({block:'center',behavior:'smooth'})}})();return}if(currentView==='shipping'||currentView==='orders')return;const schema=schemas[currentView];if(edit){const r=rows.find(x=>String(x[schema.key])===edit.dataset.edit);if(r)openEditor(r)}else if(del)eraseRow(del.dataset.delete)});
  $('#closeEditor').addEventListener('click',()=>$('#editorDialog').close());
  $('#cancelEditor').addEventListener('click',()=>$('#editorDialog').close());
  $('#editorForm').addEventListener('submit',saveRow);

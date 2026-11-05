@@ -34,3 +34,10 @@
 #formFields .field small{font-size:11px;color:#807969;line-height:1.6}
 @media(max-width:900px){.gn-order-card summary{grid-template-columns:1fr 1fr}.gn-order-meta{white-space:normal}.gn-notif-pop{right:-45px}}
 @media(max-width:600px){.gn-plus-actions button{flex:1 1 130px}.gn-notif-pop{right:-45px}.gn-order-card summary{grid-template-columns:1fr 1fr;gap:10px}}
+
+.gn-notif-bell span[hidden]{display:none}
+.gn-notif-item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #eeeee6;background:#fff;padding:12px 9px;color:#304333;cursor:pointer;font:500 12px/1.5 system-ui}
+.gn-notif-item.is-unread{background:#f4f1e9;border-left:3px solid #ab8462}
+.gn-notif-item.is-read{color:#7b7b72}
+.gn-notif-item:hover,.gn-notif-item:focus-visible{background:#eaf0e5}
+.gn-notif-item:disabled{opacity:.6;cursor:wait}

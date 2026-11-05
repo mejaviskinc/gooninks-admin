@@ -41,6 +41,10 @@ jobs:
           if grep -Ein '(sb_secret_|service_role)' gn-config.js index.html admin.js admin-plus.js admin-reports.js admin-tracking.js; then
             echo 'Potential server-side secret in public assets'; exit 1
           fi
+      - name: Test admin workflows
+        run: |
+          npm ci --ignore-scripts
+          npm test
       - name: Stage public files only
         shell: bash
         run: |

@@ -1,28 +1,11 @@
 'use strict';
 /* GoO ninks admin-managed tracking. Reuses verified payment and shipping statuses. */
 (()=>{
- schemas.tracking={title:'Lacak Pesanan',desc:'Kelola perjalanan paket, tulis pembaruan untuk pelanggan, dan bagikan tautan pelacakan pribadi. Status pengiriman mengikuti alur pembayaran dan pengemasan.',table:'gn_shipments',key:'order_id',headline:'order_id',fields:[]};
- const nav=document.createElement('button');
- nav.className='nav-link';nav.type='button';nav.dataset.view='tracking';
- nav.innerHTML='<span>◉</span> Lacak Pesanan';
- const shippingNav=document.querySelector('#sidebarNav [data-view="shipping"]');
- if(shippingNav)shippingNav.after(nav);else document.querySelector('#sidebarNav')?.append(nav);
- const originalFetch=fetchRows,originalRender=renderTable,originalLoad=loadView;
- fetchRows=async function(view){return originalFetch(view==='tracking'?'shipping':view)};
- renderTable=function(){
-   if(currentView==='tracking'){
-     $('#rowCounter').textContent=rows.length+' pesanan dengan status pengiriman';
-     const keyword=$('#searchBox').value.trim().toLowerCase();
-     const filtered=rows.filter(s=>(s.order_id+' '+s._order?.customer_name+' '+s.tracking_number+' '+s.carrier).toLowerCase().includes(keyword));
-     renderShippingQueue(filtered);
-     return;
-   }
-   return originalRender();
- };
- loadView=async function(view){
-  await originalLoad(view);
-  if(view==='tracking')$('#newButton').hidden=true;
- };
+ // One workspace; retain the old view name as a navigation alias.
+ schemas.shipping.title='Pengiriman & Pelacakan';
+ schemas.shipping.desc='Pesanan dengan pembayaran terverifikasi lunas: pengemasan, kurir, resi, riwayat perjalanan, dan tautan pelacakan pelanggan.';
+ const originalLoad=loadView;
+ loadView=async function(view){return originalLoad(view==='tracking'?'shipping':view)};
  const shippingRenderer=renderShippingQueue;
  renderShippingQueue=function(data){
   shippingRenderer(data);

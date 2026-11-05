@@ -1,0 +1,10 @@
+{
+  "name": "gooninks-admin",
+  "private": true,
+  "scripts": {
+    "test": "node tests/admin-workflow.test.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

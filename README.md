@@ -31,3 +31,11 @@ Repository > Settings > Pages > Deploy from branch > `main` / `(root)` > Save. K
 Referensi:
 - https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
 - https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site
+
+### Admin update — 6 November 2026
+
+- Notification clicks persist read status per authenticated admin. The bell counts unread items; read failures retain the count and show an error.
+- Customers can be entered manually, including name, email, phone, address, labels and notes. Profiles and checkout history merge by email; manual entries never create payment orders or revenue.
+- Pengiriman & Pelacakan is one workspace. It includes only non-deleted orders with confirmed `paid` status, with packing, courier, tracking number, shipment history and private tracking links. The previous `tracking` view is an alias.
+- Database change record: `docs/ADMIN-UPDATE-20261106.sql`. Existing profile admin RLS is retained; notification reads require both admin authorization and the current user's ID.
+- Regression checks: `npm ci && npm test` (DOM tests with mocked API). Database checks were also run under authenticated admin/non-admin roles and rolled back. These tests do not simulate real payments or courier delivery.

@@ -14,7 +14,7 @@ schemas.inventory.fields.push(
 schemas.ads.fields.push(['video_url','Video iklan (URL MP4 / WEBM)','text',false]);
 schemas.archived={title:'Arsip Produk',desc:'Produk diarsipkan tidak tampil di toko. Pulihkan dengan tombol di bawah.',table:'gn_inventory',key:'sku',headline:'product_name',fields:[]};
 schemas.deleted_orders={title:'Pesanan Dihapus',desc:'Arsip pesanan berikut alasan penghapusan. Pembayaran tetap tercatat dan tidak dibatalkan.',table:'gn_orders',key:'order_id',headline:'order_id',fields:[]};
-schemas.customers={title:'Pelanggan',desc:'Ringkasan pelanggan yang pernah checkout, ditampilkan hanya untuk admin.',table:'gn_orders',key:'order_id',headline:'customer_name',fields:[]};
+schemas.customers={title:'Pelanggan',desc:'Kelola pelanggan dari checkout dan tambahkan data pelanggan secara manual.',table:'gn_orders',key:'order_id',headline:'customer_name',fields:[]};
 schemas.account={title:'Pengaturan Akun',desc:'Ganti alamat email dan kata sandi akun login Anda.',table:'gn_admins',key:'user_id',headline:'user_id',fields:[]};
 
 const sb=document.querySelector('#sidebarNav');
@@ -32,7 +32,7 @@ const rowdate=d=>d?new Date(d).toLocaleString('id-ID',{dateStyle:'medium',timeSt
 fetchRows=async function(view){
  if(view==='archived'){const {data,error}=await db.from('gn_inventory').select('*').eq('archived',true).order('updated_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  if(view==='deleted_orders'){const {data,error}=await db.from('gn_orders').select('*').not('deleted_at','is',null).order('deleted_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
- if(view==='customers'){const [orders,profiles]=await Promise.all([db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at,status,paid_at').order('created_at',{ascending:false}).limit(500),db.from('gn_customer_profiles').select('email,customer_notes,customer_tags').limit(500)]);if(orders.error)throw orders.error;if(profiles.error)throw profiles.error;const p=new Map((profiles.data||[]).map(x=>[String(x.email).toLowerCase(),x]));return (orders.data||[]).map(x=>({...x,_profile:p.get(String(x.customer_email).toLowerCase())||null}))}
+ if(view==='customers'){const [orders,profiles]=await Promise.all([db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at,status,paid_at').order('created_at',{ascending:false}).limit(500),db.from('gn_customer_profiles').select('*').limit(500)]);if(orders.error)throw orders.error;if(profiles.error)throw profiles.error;const p=new Map((profiles.data||[]).map(x=>[String(x.email).toLowerCase(),x]));return [...(orders.data||[]).map(x=>({...x,_profile:p.get(String(x.customer_email).toLowerCase().trim())||null})),...(profiles.data||[]).map(x=>({customer_email:x.email,customer_name:x.customer_name,customer_phone:x.customer_phone,_manual:true,_profile:x}))]}
  if(view==='account')return [];
  if(view==='orders'){const {data,error}=await db.from('gn_orders').select('*').is('deleted_at',null).order('created_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  return baseFetchRows(view);
@@ -55,13 +55,13 @@ function renderCustomers(){
  const m=new Map();
  for(const o of rows){const key=String(o.customer_email||'').toLowerCase().trim();if(!key)continue;
  const prev=m.get(key)||{name:o.customer_name,email:key,phone:o.customer_phone,total:0,orders:0,last:o.created_at,customer_notes:o._profile?.customer_notes||'',customer_tags:o._profile?.customer_tags||''};
- prev.orders++;if(o.status==='paid'){prev.paid_orders=(prev.paid_orders||0)+1;prev.total+=Math.max(0,Number(o.amount)||0);}m.set(key,prev);
+ if(o._profile){prev.name=o._profile.customer_name||prev.name;prev.phone=o._profile.customer_phone||prev.phone;prev.address=o._profile.customer_address||''}if(!o._manual)prev.orders++;if(o.status==='paid'){prev.paid_orders=(prev.paid_orders||0)+1;prev.total+=Math.max(0,Number(o.amount)||0);}m.set(key,prev);
  }
  const data=[...m.values()].filter(x=>JSON.stringify(x).toLowerCase().includes($('#searchBox').value.trim().toLowerCase()));
  $('#rowCounter').textContent=data.length+' pelanggan';
  $('#records').innerHTML=data.length?'<div class="gn-plus-table"><table class="record-table"><thead><tr><th>Pelanggan</th><th>Kontak</th><th>Pesanan</th><th>Belanja lunas</th><th>Terakhir</th><th>Catatan / Segmen</th><th>Aksi</th></tr></thead><tbody>'+
  data.map(x=>'<tr><td><strong>'+safe(x.name)+'</strong></td><td>'+safe(x.email)+'<small>'+safe(x.phone||'')+'</small></td><td>'+x.orders+'</td><td>'+rupiah(x.total)+'</td><td>'+rowdate(x.last)+'</td><td>'+safe(x.customer_tags||'—')+'<small>'+safe(x.customer_notes||'Belum ada catatan')+'</small></td><td>'+btn('Kelola','data-customer-edit="'+safe(x.email)+'"')+'</td></tr>').join('')+
- '</tbody></table></div>':'<div class="empty">Belum ada data pelanggan dari checkout.</div>';
+ '</tbody></table></div>':'<div class="empty">Belum ada pelanggan. Klik Tambah pelanggan untuk memasukkan data manual.</div>';
 }
 function renderAccount(){
  $('#rowCounter').textContent='Akun saya';
@@ -100,8 +100,9 @@ renderTable=function(){
  if(currentView==='orders')decorateOrders();
  if(currentView==='inventory')decorateInventory();
 };
-loadView=async function(view){await baseLoad(view);$('#newButton').hidden=['archived','deleted_orders','customers','account'].includes(view)||$('#newButton').hidden;};
+loadView=async function(view){await baseLoad(view);const button=$('#newButton');button.hidden=['archived','deleted_orders','account'].includes(currentView)||button.hidden;button.textContent=currentView==='customers'?'+ Tambah pelanggan':'+ Tambah baru';};
 openEditor=function(row=null){
+ if(currentView==='customers')return openCustomerDialog(row);
  baseOpen(row);
  if(currentView==='inventory'){
   if(!row&&$('#field_preorder_lead_days'))$('#field_preorder_lead_days').value='14';
@@ -179,18 +180,7 @@ function openOrderDialog(order,action){
 }
 $('#records').addEventListener('click',async e=>{
  const c=e.target.closest('[data-customer-edit]');
- if(c){
-  const email=c.dataset.customerEdit,record=rows.find(x=>String(x.customer_email).toLowerCase()===email);
-  if(!record)return;
-  const tags=prompt('Segmen / label pelanggan (maks. 240 karakter):',record._profile?.customer_tags||'');
-  if(tags===null)return;
-  const notes=prompt('Catatan pelanggan (maks. 2000 karakter):',record._profile?.customer_notes||'');
-  if(notes===null)return;
-  if(tags.length>240||notes.length>2000)return notify('Catatan atau label terlalu panjang',true);
-  const {error}=await db.from('gn_customer_profiles').upsert({email,customer_tags:tags,customer_notes:notes,updated_by:currentUser.id,updated_at:new Date().toISOString()},{onConflict:'email'});
-  if(error)return notify(error.message,true);
-  notify('Catatan pelanggan tersimpan');await loadView('customers');return;
- }
+ if(c){const record=rows.find(x=>String(x.customer_email).toLowerCase().trim()===c.dataset.customerEdit);if(record)openCustomerDialog(record);return}
  const archive=e.target.closest('[data-archive-sku],[data-restore-sku]');
  if(archive){const restore=!!archive.dataset.restoreSku;void changeArchive(restore?archive.dataset.restoreSku:archive.dataset.archiveSku,restore);return}
  const act=e.target.closest('[data-order-action]');
@@ -237,26 +227,78 @@ $('#records').addEventListener('submit',async e=>{
   }catch(err){notify(err.message,true)}
  }
 });
-const bell=document.createElement('div');bell.className='gn-notif-wrap';bell.innerHTML='<button type="button" class="gn-notif-bell" aria-label="Lihat notifikasi" aria-expanded="false" id="gnNotifBell">♧<span id="gnNotifCount">0</span></button><div class="gn-notif-pop" id="gnNotifPop" hidden><h3>Notifikasi terbaru</h3><div id="gnNotifList">Memuat…</div></div>';
+const customerDialog=document.createElement('dialog');customerDialog.className='gn-plus-modal';document.body.append(customerDialog);
+function openCustomerDialog(record=null){
+ const profile=record?._profile||{};
+ customerDialog.innerHTML='<form><h3>'+(record?'Kelola pelanggan':'Tambah pelanggan')+'</h3>'+[
+  ['customer_name','Nama pelanggan','text',profile.customer_name||record?.customer_name||'',100,true],
+  ['email','Email','email',record?.customer_email||'',180,true],
+  ['customer_phone','Nomor telepon / WhatsApp','tel',profile.customer_phone||record?.customer_phone||'',25,false],
+  ['customer_address','Alamat','textarea',profile.customer_address||'',450,false],
+  ['customer_tags','Segmen / label','text',profile.customer_tags||'',240,false],
+  ['customer_notes','Catatan pelanggan','textarea',profile.customer_notes||'',2000,false]
+ ].map(([name,label,type,value,max,required])=>'<label>'+label+(type==='textarea'?'<textarea name="'+name+'" maxlength="'+max+'">'+safe(value)+'</textarea>':'<input name="'+name+'" type="'+type+'" value="'+safe(value)+'" maxlength="'+max+'" '+(required?'required':'')+' '+(name==='email'&&record?'readonly':'')+'>')+'</label>').join('')+
+ '<div class="gn-plus-actions"><button type="button" data-cancel-customer>Batal</button><button type="submit" class="primary small">Simpan pelanggan</button></div></form>';
+ customerDialog.querySelector('[data-cancel-customer]').onclick=()=>customerDialog.close();
+ customerDialog.querySelector('form').onsubmit=async event=>{
+  event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type="submit"]');button.disabled=true;
+  try{
+   const fields=Object.fromEntries(new FormData(form));for(const key in fields)fields[key]=String(fields[key]).trim();
+   fields.email=fields.email.toLowerCase();if(fields.customer_name.length<2)throw Error('Nama pelanggan minimal 2 karakter');
+   fields.updated_by=currentUser.id;fields.updated_at=new Date().toISOString();
+   const query=record?db.from('gn_customer_profiles').upsert(fields,{onConflict:'email'}):db.from('gn_customer_profiles').insert(fields);
+   const {data,error}=await query.select('email');if(error){if(error.code==='23505')throw Error('Email sudah terdaftar. Gunakan Kelola pada pelanggan tersebut.');throw error}
+   if(!data?.length)throw Error('Data pelanggan tidak tersimpan. Periksa akses akun.');
+   customerDialog.close();notify('Data pelanggan berhasil disimpan');await loadView('customers');
+  }catch(error){notify(error.message,true)}finally{button.disabled=false}
+ };
+ customerDialog.showModal();
+}
+const bell=document.createElement('div');bell.className='gn-notif-wrap';
+bell.innerHTML='<button type="button" class="gn-notif-bell" aria-label="Lihat notifikasi" aria-expanded="false" aria-controls="gnNotifPop" id="gnNotifBell"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span id="gnNotifCount" hidden>0</span></button><div class="gn-notif-pop" id="gnNotifPop" hidden><h3>Notifikasi terbaru</h3><div id="gnNotifList">Memuat…</div></div>';
 document.querySelector('.top-actions')?.prepend(bell);
-const bellBtn=bell.querySelector('button'),pop=bell.querySelector('#gnNotifPop');
-bellBtn.textContent='🔔';const count=document.createElement('span');count.id='gnNotifCount';count.textContent='0';bellBtn.append(count);
+const bellBtn=bell.querySelector('button'),pop=bell.querySelector('#gnNotifPop'),count=bell.querySelector('#gnNotifCount');
+let notificationItems=[],readKeys=new Set(),notificationUser=null,notificationLoading=false;
+function paintNotifications(){
+ const unread=notificationItems.filter(item=>!readKeys.has(item.key));
+ count.textContent=String(unread.length);count.hidden=unread.length===0;
+ bellBtn.setAttribute('aria-label',unread.length+' notifikasi belum dibaca');
+ bell.querySelector('#gnNotifList').innerHTML=notificationItems.length?notificationItems.map(item=>'<button type="button" class="gn-notif-item '+(readKeys.has(item.key)?'is-read':'is-unread')+'" data-notification-key="'+safe(item.key)+'">'+safe(item.title)+'<small>'+rowdate(item.date)+(readKeys.has(item.key)?' · Sudah dibaca':' · Belum dibaca')+'</small></button>').join(''):'<p>Tidak ada notifikasi yang perlu ditindaklanjuti.</p>';
+}
 bellBtn.addEventListener('click',()=>{pop.hidden=!pop.hidden;bellBtn.setAttribute('aria-expanded',String(!pop.hidden));if(!pop.hidden)void refreshNotifications()});
-async function refreshNotifications(){
- if(!db||!currentUser)return;
+document.addEventListener('click',event=>{if(!bell.contains(event.target)){pop.hidden=true;bellBtn.setAttribute('aria-expanded','false')}});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!pop.hidden){pop.hidden=true;bellBtn.setAttribute('aria-expanded','false');bellBtn.focus()}});
+pop.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-notification-key]');if(!button||button.disabled||!currentUser)return;
+ const item=notificationItems.find(x=>x.key===button.dataset.notificationKey);if(!item)return;
+ const userId=currentUser.id;button.disabled=true;
  try{
- const [r,l,p]=await Promise.all([
-  db.from('gn_orders').select('order_id,customer_name,created_at,status').order('created_at',{ascending:false}).limit(7),
-  db.from('gn_leads').select('id,name,created_at,stage').eq('stage','new').order('created_at',{ascending:false}).limit(7),
-  db.from('gn_inventory').select('sku,product_name,stock,low_stock_threshold').eq('archived',false).limit(150)
+  if(!readKeys.has(item.key)){
+   const {error}=await db.from('gn_notification_reads').upsert({user_id:userId,notification_key:item.key,read_at:new Date().toISOString()},{onConflict:'user_id,notification_key'});if(error)throw error;
+   if(currentUser?.id!==userId)return;
+   readKeys.add(item.key);paintNotifications();
+  }
+  pop.hidden=true;bellBtn.setAttribute('aria-expanded','false');await loadView(item.view);
+ }catch(error){notify('Gagal menandai notifikasi: '+error.message,true)}finally{button.disabled=false}
+});
+async function refreshNotifications(){
+ if(!db||!currentUser||notificationLoading)return;
+ const userId=currentUser.id;notificationLoading=true;
+ if(notificationUser!==userId){notificationUser=userId;readKeys=new Set();notificationItems=[];paintNotifications()}
+ try{
+ const [r,l,p,reads]=await Promise.all([
+  db.from('gn_orders').select('order_id,customer_name,created_at,status').eq('status','pending').is('deleted_at',null).order('created_at',{ascending:false}).limit(500),
+  db.from('gn_leads').select('id,name,created_at,stage').eq('stage','new').order('created_at',{ascending:false}).limit(500),
+  db.from('gn_inventory').select('sku,product_name,stock,low_stock_threshold').eq('archived',false).limit(500),
+  db.from('gn_notification_reads').select('notification_key').eq('user_id',userId).order('read_at',{ascending:false}).limit(1000)
  ]);
- if(r.error||l.error||p.error)return;
+ for(const result of [r,l,p,reads])if(result.error)throw result.error;
+ if(currentUser?.id!==userId)return;
+ readKeys=new Set([...readKeys,...(reads.data||[]).map(x=>x.notification_key)]);
  const low=(p.data||[]).filter(x=>x.stock!==null&&x.stock<=x.low_stock_threshold);
- const pending=(r.data||[]).filter(x=>x.status==='pending');
- count.textContent=String(pending.length+(l.data||[]).length+low.length);
- const items=[...pending.map(x=>['Pesanan menunggu bayar: '+x.customer_name,x.created_at]),...(l.data||[]).map(x=>['Lead baru: '+x.name,x.created_at]),...low.map(x=>['Stok menipis: '+x.product_name,null])];
- bell.querySelector('#gnNotifList').innerHTML=items.length?items.slice(0,12).map(x=>'<p>'+safe(x[0])+'<small>'+rowdate(x[1])+'</small></p>').join(''):'<p>Tidak ada notifikasi yang perlu ditindaklanjuti.</p>';
- }catch(err){console.warn('Notifications unavailable:',err.message)}
+ notificationItems=[...(r.data||[]).map(x=>({key:'order:'+x.order_id+':pending',title:'Pesanan menunggu bayar: '+x.customer_name,date:x.created_at,view:'orders'})),...(l.data||[]).map(x=>({key:'lead:'+x.id+':new',title:'Lead baru: '+x.name,date:x.created_at,view:'leads'})),...low.map(x=>({key:'stock:'+x.sku+':'+x.stock,title:'Stok menipis: '+x.product_name,date:null,view:'inventory'}))];
+ paintNotifications();
+ }catch(err){console.warn('Notifications unavailable:',err.message);bell.querySelector('#gnNotifList').textContent='Gagal memuat notifikasi. Buka kembali untuk mencoba lagi.'}finally{notificationLoading=false}
 }
 
 /* Reconcile pending payments only after querying Midtrans from the authenticated server.
