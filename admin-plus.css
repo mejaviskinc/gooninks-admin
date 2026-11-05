@@ -41,3 +41,6 @@
 .gn-notif-item.is-read{color:#7b7b72}
 .gn-notif-item:hover,.gn-notif-item:focus-visible{background:#eaf0e5}
 .gn-notif-item:disabled{opacity:.6;cursor:wait}
+
+/* Keep the notification panel above positioned dashboard cards, below mobile navigation. */
+.topbar{position:relative;z-index:10}
