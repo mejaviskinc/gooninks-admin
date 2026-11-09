@@ -375,7 +375,7 @@ let orderChannel=null,orderRefreshTimer=null,orderFallbackTimer=null,orderRefres
 async function refreshOrderView(){
  if(!currentUser||document.hidden)return;
  if(loading||orderRefreshBusy){queueOrderRefresh();return}
- if(!['orders','shipping','tracking','leads','overview'].includes(currentView))return;
+ if(!['orders','shipping','tracking','leads','overview','customers'].includes(currentView))return;
  // Avoid replacing a shipping form while an administrator is editing it.
  if($('#editorDialog')?.open||document.activeElement?.closest('[data-shipping-form]'))return;
  orderRefreshBusy=true;const view=currentView;
