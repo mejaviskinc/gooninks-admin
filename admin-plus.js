@@ -32,7 +32,26 @@ const rowdate=d=>d?new Date(d).toLocaleString('id-ID',{dateStyle:'medium',timeSt
 fetchRows=async function(view){
  if(view==='archived'){const {data,error}=await db.from('gn_inventory').select('*').eq('archived',true).order('updated_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  if(view==='deleted_orders'){const {data,error}=await db.from('gn_orders').select('*').not('deleted_at','is',null).order('deleted_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
- if(view==='customers'){const [orders,profiles]=await Promise.all([db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at,status,paid_at').order('created_at',{ascending:false}).limit(500),db.from('gn_customer_profiles').select('*').limit(500)]);if(orders.error)throw orders.error;if(profiles.error)throw profiles.error;const p=new Map((profiles.data||[]).map(x=>[String(x.email).toLowerCase(),x]));return [...(orders.data||[]).map(x=>({...x,_profile:p.get(String(x.customer_email).toLowerCase().trim())||null})),...(profiles.data||[]).map(x=>({customer_email:x.email,customer_name:x.customer_name,customer_phone:x.customer_phone,_manual:true,_profile:x}))]}
+ if(view==='customers'){
+  const [orders,profiles,inquiries]=await Promise.all([
+   db.from('gn_orders').select('customer_name,customer_email,customer_phone,amount,created_at,order_id,deleted_at,status,paid_at').order('created_at',{ascending:false}).limit(500),
+   db.from('gn_customer_profiles').select('*').limit(500),
+   db.from('gn_leads').select('id,name,email,phone,created_at,order_id').eq('interest','Permintaan pembelian GoO Ninks').order('created_at',{ascending:false}).limit(500)
+  ]);
+  if(orders.error)throw orders.error;
+  if(profiles.error)throw profiles.error;
+  if(inquiries.error)throw inquiries.error;
+  const p=new Map((profiles.data||[]).map(x=>[String(x.email).toLowerCase().trim(),x]));
+  const orderIds=new Set((orders.data||[]).map(x=>x.order_id));
+  return [
+   ...(orders.data||[]).map(x=>({...x,_profile:p.get(String(x.customer_email).toLowerCase().trim())||null})),
+   ...(inquiries.data||[]).filter(x=>!x.order_id||!orderIds.has(x.order_id)).map(x=>({
+    customer_name:x.name,customer_email:x.email,customer_phone:x.phone,
+    created_at:x.created_at,_inquiry:true,_profile:p.get(String(x.email).toLowerCase().trim())||null
+   })),
+   ...(profiles.data||[]).map(x=>({customer_email:x.email,customer_name:x.customer_name,customer_phone:x.customer_phone,_manual:true,_profile:x}))
+  ];
+ }
  if(view==='account')return [];
  if(view==='orders'){const {data,error}=await db.from('gn_orders').select('*').is('deleted_at',null).order('created_at',{ascending:false}).limit(500);if(error)throw error;return data||[]}
  return baseFetchRows(view);
@@ -53,14 +72,34 @@ function renderDeletedOrders(){
 }
 function renderCustomers(){
  const m=new Map();
- for(const o of rows){const key=String(o.customer_email||'').toLowerCase().trim();if(!key)continue;
- const prev=m.get(key)||{name:o.customer_name,email:key,phone:o.customer_phone,total:0,orders:0,last:o.created_at,customer_notes:o._profile?.customer_notes||'',customer_tags:o._profile?.customer_tags||''};
- if(o._profile){prev.name=o._profile.customer_name||prev.name;prev.phone=o._profile.customer_phone||prev.phone;prev.address=o._profile.customer_address||''}if(!o._manual)prev.orders++;if(o.status==='paid'){prev.paid_orders=(prev.paid_orders||0)+1;prev.total+=Math.max(0,Number(o.amount)||0);}m.set(key,prev);
+ for(const o of rows){
+  const email=String(o.customer_email||'').toLowerCase().trim();
+  const phone=String(o.customer_phone||'').trim();
+  const key=email||('phone:'+phone.replace(/\D/g,''));
+  if(!email&&!phone)continue;
+  const prev=m.get(key)||{
+   name:o.customer_name,email,phone,total:0,orders:0,requests:0,
+   last:o.created_at||o._profile?.updated_at,
+   customer_notes:o._profile?.customer_notes||'',customer_tags:o._profile?.customer_tags||''
+  };
+  if(o._profile){
+   prev.name=o._profile.customer_name||prev.name;
+   prev.phone=o._profile.customer_phone||prev.phone;
+   prev.address=o._profile.customer_address||'';
+  }
+  if(o._inquiry)prev.requests++;
+  else if(!o._manual)prev.orders++;
+  if(o.status==='paid'){
+   prev.paid_orders=(prev.paid_orders||0)+1;
+   prev.total+=Math.max(0,Number(o.amount)||0);
+  }
+  if(o.created_at&&(!prev.last||Date.parse(o.created_at)>Date.parse(prev.last)))prev.last=o.created_at;
+  m.set(key,prev);
  }
  const data=[...m.values()].filter(x=>JSON.stringify(x).toLowerCase().includes($('#searchBox').value.trim().toLowerCase()));
  $('#rowCounter').textContent=data.length+' pelanggan';
- $('#records').innerHTML=data.length?'<div class="gn-plus-table"><table class="record-table"><thead><tr><th>Pelanggan</th><th>Kontak</th><th>Pesanan</th><th>Belanja lunas</th><th>Terakhir</th><th>Catatan / Segmen</th><th>Aksi</th></tr></thead><tbody>'+
- data.map(x=>'<tr><td><strong>'+safe(x.name)+'</strong></td><td>'+safe(x.email)+'<small>'+safe(x.phone||'')+'</small></td><td>'+x.orders+'</td><td>'+rupiah(x.total)+'</td><td>'+rowdate(x.last)+'</td><td>'+safe(x.customer_tags||'—')+'<small>'+safe(x.customer_notes||'Belum ada catatan')+'</small></td><td>'+btn('Kelola','data-customer-edit="'+safe(x.email)+'"')+'</td></tr>').join('')+
+ $('#records').innerHTML=data.length?'<div class="gn-plus-table"><table class="record-table"><thead><tr><th>Pelanggan</th><th>Kontak</th><th>Pesanan / Permintaan</th><th>Belanja lunas</th><th>Terakhir</th><th>Catatan / Segmen</th><th>Aksi</th></tr></thead><tbody>'+
+ data.map(x=>'<tr><td><strong>'+safe(x.name)+'</strong></td><td>'+safe(x.email)+'<small>'+safe(x.phone||'')+'</small></td><td>'+x.orders+(x.requests?' / '+x.requests+' permintaan':'')+'</td><td>'+rupiah(x.total)+'</td><td>'+rowdate(x.last)+'</td><td>'+safe(x.customer_tags||'—')+'<small>'+safe(x.customer_notes||'Belum ada catatan')+'</small></td><td>'+btn('Kelola','data-customer-edit="'+safe(x.email)+'"')+'</td></tr>').join('')+
  '</tbody></table></div>':'<div class="empty">Belum ada pelanggan. Klik Tambah pelanggan untuk memasukkan data manual.</div>';
 }
 function renderAccount(){
