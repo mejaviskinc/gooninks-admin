@@ -184,6 +184,7 @@
  $('#editorForm').addEventListener('submit',async event=>{
    if(currentView!=='inventory')return;
    event.preventDefault();event.stopImmediatePropagation();
+   const form=event.currentTarget;
    const save=$('#saveButton');save.disabled=true;save.textContent='Menyimpan…';
    try{
      const category=$('#field_category');
@@ -211,7 +212,8 @@
      }
      if(gallery)gallery.value=[...new Set(previous)].join('\n');
      if($('#field_archived')?.checked)$('#field_visible').checked=false;
-     await saveRow(event);
+     // Do not reuse event.currentTarget after async uploads; DOM clears it.
+     await saveRow({preventDefault(){},currentTarget:form});
    }catch(error){notify('Inventori: '+(error.message||'Gagal menyimpan'),true)}
    finally{save.disabled=false;save.textContent='Simpan perubahan'}
  },true);
