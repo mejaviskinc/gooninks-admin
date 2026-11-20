@@ -146,7 +146,7 @@ openEditor=function(row=null){
  if(currentView==='inventory'){
   if(!row&&$('#field_preorder_lead_days'))$('#field_preorder_lead_days').value='14';
   const f=document.createElement('label');f.className='field';
-  f.innerHTML='Unggah foto/video tambahan (bisa pilih beberapa)<input name="gnMultiUpload" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"><small>Foto maksimal 5MB per file; video maksimal 25MB. File lama tidak terhapus otomatis.</small>';
+  f.innerHTML='Upload foto produk<input name="gnMultiUpload" type="file" multiple accept="image/jpeg,image/png,image/webp"><small>Pilih hingga 15 foto JPG/PNG/WEBP, maksimal 5 MB per foto. Kamu bisa memilih beberapa kali sebelum menyimpan.</small>';
   $('#formFields').append(f);
  }
  if(currentView==='ads'){

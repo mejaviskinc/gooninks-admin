@@ -28,6 +28,12 @@ click('#records [data-edit="LOW"]');await tick();
 assert.equal($('#editorDialog [name="gnMultiUpload"]')?.type,'file');
 assert.equal($('#editorDialog').querySelectorAll('input[type=file]').length,1,'exactly one upload input');
 assert.ok($('#gnUploadCount')&&$('#gnUploadPreview'));
+assert.equal($('#editorDialog [name="gnMultiUpload"]').multiple,true,'the one upload input accepts multiple photos');
+assert.equal($('#editorDialog [name="gnMultiUpload"]').accept,'image/jpeg,image/png,image/webp');
+assert.equal($('#gnRecoveryPanel'),null,'no additional recovery photo picker');
+assert.equal($('#editorDialog .gn-media-manual'),null,'no alternate URL photo entry');
+assert.equal($('#editorDialog .gn-studio-tool'),null,'no studio photo picker');
+assert.ok($('#editorDialog .gn-media-data-only[hidden]'),'existing URLs remain in form data, without a second photo entry');
 assert.ok($('#field_category').querySelector('option[value="__gn_category_add_new__"]'));
 $('#field_category').value='__gn_category_add_new__';$('#field_category').dispatchEvent(new w.Event('change'));
 assert.equal($('#gnNewCategoryWrap').hidden,false);
@@ -39,22 +45,22 @@ const chosen=[
 ];
 const more=[
  new w.File(['test'],'third.png',{type:'image/png'}),
- new w.File(['test'],'clip.mp4',{type:'video/mp4'})
+ new w.File(['test'],'fourth.png',{type:'image/png'})
 ];
 const photoInput=$('#editorDialog [name="gnMultiUpload"]');
 Object.defineProperty(photoInput,'files',{value:chosen,configurable:true});
 photoInput.dispatchEvent(new w.Event('change'));
-assert.match($('#gnUploadCount').textContent,/2 foto, 0 video/);
+assert.match($('#gnUploadCount').textContent,/2 dari 15 foto/);
 assert.equal($('#gnUploadPreview').children.length,2);
 Object.defineProperty(photoInput,'files',{value:more,configurable:true});
 photoInput.dispatchEvent(new w.Event('change'));
-assert.match($('#gnUploadCount').textContent,/3 foto, 1 video/);
+assert.match($('#gnUploadCount').textContent,/4 dari 15 foto/);
 assert.equal($('#gnUploadPreview').children.length,4,'separate picker openings must accumulate');
 Object.defineProperty(photoInput,'files',{value:[chosen[0]],configurable:true});
 photoInput.dispatchEvent(new w.Event('change'));
 assert.equal($('#gnUploadPreview').children.length,4,'reselecting same image must not duplicate it');
-click('#gnUploadPreview [aria-label="Hapus clip.mp4"]');
-assert.match($('#gnUploadCount').textContent,/3 foto, 0 video/);
+click('#gnUploadPreview [aria-label="Hapus fourth.png"]');
+assert.match($('#gnUploadCount').textContent,/3 dari 15 foto/);
 assert.equal($('#gnUploadPreview').children.length,3);
 assert.equal($('#gnUseCover').checked,false,'editing should not replace an existing cover by default');
 $('#field_category').value='Wastra';$('#field_category').dispatchEvent(new w.Event('change'));
@@ -99,17 +105,8 @@ assert.match(run('testData.gn_inventory[0].gallery_media'),/old-cover.webp/,'pre
 assert.equal($('#editorDialog').open,false);
 await run("loadView('inventory')");
 click('#records [data-edit="LOW"]');await tick();
-const recovery=$('#gnRecoveryPanel');
-assert.ok(recovery,'recovery must be inside the one upload panel');
-recovery.open=true;recovery.dispatchEvent(new w.Event('toggle'));
-await new Promise(r=>setTimeout(r,50));
-assert.equal($('#gnRecoveryPanel .gn-recovery-item')?.tagName,'BUTTON','orphan recovery item must be selectable');
-click('#gnRecoveryPanel .gn-recovery-item');
-assert.match($('#gnRecoveryPanel .gn-recovery-message').textContent,/1 foto/);
-const uploadsBefore=w.uploadedNames.length;
-submit();await new Promise(r=>setTimeout(r,100));
-assert.equal($('#editorDialog').open,false);
-assert.match(run('testData.gn_inventory[0].gallery_media'),/orphan.png/,'recovered photo must attach to the selected SKU');
-assert.equal(w.uploadedNames.length,uploadsBefore,'recovery must not upload files again');
+assert.equal($('#editorDialog').querySelectorAll('input[type=file]').length,1,'only a single photo picker is shown on re-edit');
+assert.equal($('#gnRecoveryPanel'),null,'photo recovery UI removed');
+$('#editorDialog').close();
 console.log('PASS: manual customer create/edit/duplicate; notification decrease/persistence/error/zero; paid-only shipping excludes pending and deleted; merged packing and tracking with legacy alias');dom.window.close();
 })().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
