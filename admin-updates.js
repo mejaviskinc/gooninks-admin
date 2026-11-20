@@ -89,6 +89,7 @@
  const ADD_NEW='__gn_category_add_new__';
  let previewUrls=[];
  let queuedFiles=[];
+ let recoveredUrls=new Set();
  const uploadedUrls=new Map();
  const fileKey=f=>[f.name,f.size,f.lastModified,f.type].join(':');
  function addFiles(input){
@@ -158,7 +159,7 @@
  }
  const previousOpen=openEditor;
  openEditor=function(row=null){
-   revokePreviews();queuedFiles=[];uploadedUrls.clear();
+   revokePreviews();queuedFiles=[];uploadedUrls.clear();recoveredUrls.clear();
    previousOpen(row);
    if(currentView!=='inventory')return;
 
@@ -177,7 +178,10 @@
      cover.innerHTML='<input type="checkbox" id="gnUseCover" '+(!row?.image_url?'checked':'')+'> Jadikan foto pertama sebagai foto utama';
      const gallery=document.createElement('div');gallery.id='gnUploadPreview';gallery.className='gn-upload-preview';
      const options=document.createElement('div');options.className='gn-upload-options';
-     options.append(count,cover,gallery);uploadField.after(options);
+     const saveStatus=document.createElement('p');saveStatus.id='gnMediaSaveStatus';
+     saveStatus.className='gn-media-save-status';saveStatus.setAttribute('role','status');
+     saveStatus.setAttribute('aria-live','polite');saveStatus.hidden=true;
+     options.append(count,cover,gallery,saveStatus);uploadField.after(options);
      // Manual URL fields are advanced settings, not a second uploader.
      const main=$('#field_image_url')?.closest('.field');
      const media=$('#field_gallery_media')?.closest('.field');
@@ -188,6 +192,60 @@
      }
      input.addEventListener('change',()=>addFiles(input));
      renderUploadPreview();
+     const rescue=document.createElement('details');
+     rescue.id='gnRecoveryPanel';rescue.className='gn-recovery-panel';
+     const heading=document.createElement('summary');
+     heading.textContent='Pulihkan foto yang sudah terunggah tetapi belum masuk produk';
+     const hint=document.createElement('p');
+     hint.textContent='Pilih foto yang memang milik produk ini. Foto yang belum terhubung ke produk lain bisa dimasukkan tanpa mengunggah ulang.';
+     const grid=document.createElement('div');grid.className='gn-recovery-grid';
+     const info=document.createElement('p');info.className='gn-recovery-message';info.setAttribute('role','status');
+     rescue.append(heading,hint,info,grid);options.append(rescue);
+     let loadingRecovery=false,loadedRecovery=false;
+     rescue.addEventListener('toggle',async()=>{
+       if(!rescue.open||loadingRecovery||loadedRecovery||!db)return;
+       loadingRecovery=true;info.textContent='Memeriksa foto yang belum terhubung…';
+       try{
+         const [filesResult,inventoryResult]=await Promise.all([
+           db.storage.from('gooninks-media').list('inventory',{limit:100,sortBy:{column:'created_at',order:'desc'}}),
+           db.from('gn_inventory').select('image_url,gallery_media').limit(500)
+         ]);
+         if(filesResult.error)throw filesResult.error;
+         if(inventoryResult.error)throw inventoryResult.error;
+         const attached=new Set();
+         for(const row of inventoryResult.data||[]){
+           if(row.image_url)attached.add(row.image_url.trim());
+           for(const url of String(row.gallery_media||'').split(/\r?\n/))if(url.trim())attached.add(url.trim());
+         }
+         const recent=Date.now()-7*86400000;
+         const results=(filesResult.data||[]).filter(file=>{
+           return file.name&&/\.(jpe?g|png|webp)$/i.test(file.name)&&
+             (!file.created_at||Date.parse(file.created_at)>=recent);
+         }).map(file=>({
+           url:db.storage.from('gooninks-media').getPublicUrl('inventory/'+file.name).data.publicUrl,
+           name:file.name
+         })).filter(file=>!attached.has(file.url)).slice(0,40);
+         grid.replaceChildren();
+         for(const file of results){
+           const button=document.createElement('button');button.type='button';button.className='gn-recovery-item';
+           const img=document.createElement('img');img.src=file.url;img.alt='Foto belum tersimpan';img.loading='lazy';
+           const mark=document.createElement('small');mark.textContent='Pilih foto';
+           button.append(img,mark);
+           button.addEventListener('click',()=>{
+             if(recoveredUrls.has(file.url))recoveredUrls.delete(file.url);
+             else if(queuedFiles.length+recoveredUrls.size<15)recoveredUrls.add(file.url);
+             else return notify('Maksimal 15 foto dalam satu penyimpanan.',true);
+             button.classList.toggle('is-selected',recoveredUrls.has(file.url));
+             button.setAttribute('aria-pressed',String(recoveredUrls.has(file.url)));
+             info.textContent=recoveredUrls.size+' foto pemulihan dipilih';
+           });
+           grid.append(button);
+         }
+         info.textContent=results.length?results.length+' foto belum tertaut ditemukan.':'Belum ada foto yang bisa dipulihkan.';
+         loadedRecovery=true;
+       }catch(error){info.textContent='Gagal memuat foto sebelumnya: '+(error.message||'Periksa koneksi');}
+       finally{loadingRecovery=false}
+     });
    }
    const select=$('#field_category');
    if(select){
@@ -214,13 +272,16 @@
    if(error)throw error;
    return db.storage.from('gooninks-media').getPublicUrl(path).data.publicUrl;
  }
- // Capture the inventory submit before the older Admin Plus submit listener.
- // All non-inventory handlers (ads, promotions, etc.) retain existing behavior.
+ // Inventory media must be persisted with its SKU and verified before reporting success.
+ // Capture submission ahead of the legacy Admin Plus handler, retaining other modules.
  $('#editorForm').addEventListener('submit',async event=>{
    if(currentView!=='inventory')return;
    event.preventDefault();event.stopImmediatePropagation();
-   const form=event.currentTarget;
-   const save=$('#saveButton');save.disabled=true;save.textContent='Menyimpan…';
+   const form=event.currentTarget,save=$('#saveButton');
+   if(save.disabled)return;
+   save.disabled=true;save.textContent='Menyimpan…';
+   const saveStatus=$('#gnMediaSaveStatus');
+   if(saveStatus){saveStatus.hidden=true;saveStatus.textContent='';}
    try{
      const category=$('#field_category');
      if(category?.value===ADD_NEW){
@@ -232,16 +293,18 @@
        category.add(option);category.value=name;categoryToggle();
      }
      const files=queuedFiles.slice();
-     if(files.length>15)throw Error('Maksimal 15 file sekali unggah.');
+     if(files.length+recoveredUrls.size>15)throw Error('Maksimal 15 foto/video dalam satu penyimpanan.');
      for(const file of files){
        const max=file.type.startsWith('image/')?5*1024*1024:25*1024*1024;
        if(!['image/jpeg','image/png','image/webp','video/mp4','video/webm'].includes(file.type)||file.size>max)
          throw Error('Periksa format/ukuran file: '+file.name);
      }
-     const gallery=$('#field_gallery_media'),previous=String(gallery?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+     const gallery=$('#field_gallery_media');
+     const previous=String(gallery?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
      const main=$('#field_image_url');
      const previousCover=String(main?.value||'').trim();
-     const cover=($('#gnUseCover')?.checked||!previousCover)?files.find(file=>file.type.startsWith('image/')):null;
+     const wantCover=Boolean($('#gnUseCover')?.checked||!previousCover);
+     const cover=wantCover?files.find(file=>file.type.startsWith('image/')):null;
      let nextCover=previousCover;
      for(let i=0;i<files.length;i++){
        const file=files[i],key=fileKey(file);
@@ -251,16 +314,58 @@
        if(file===cover)nextCover=url;
        else previous.push(url);
      }
+     const recovered=Array.from(recoveredUrls);
+     if(wantCover&&!cover&&recovered.length)nextCover=recovered.shift();
+     previous.push(...recovered);
      if(nextCover!==previousCover&&previousCover)previous.unshift(previousCover);
+     const finalGallery=[...new Set(previous.filter(url=>url&&url!==nextCover))].join('\n');
      if(main)main.value=nextCover;
-     if(gallery)gallery.value=[...new Set(previous.filter(url=>url!==nextCover))].join('\n');
+     if(gallery)gallery.value=finalGallery;
      if($('#field_archived')?.checked)$('#field_visible').checked=false;
-     // Do not reuse event.currentTarget after async uploads; DOM clears it.
-     save.textContent='Menyimpan produk…';
-     await saveRow({preventDefault(){},currentTarget:form});
-     // Keep selected files after failed DB saves, without uploading them twice.
-     if(!$('#editorDialog').open){queuedFiles=[];uploadedUrls.clear()}
-   }catch(error){notify('Inventori: '+(error.message||'Gagal menyimpan'),true)}
-   finally{save.disabled=false;save.textContent='Simpan perubahan'}
+
+     // Build the payload from the same inventory schema, but verify the actual
+     // database response. Previously saveRow swallowed errors and the uploader
+     // treated unsuccessful database writes as if photos were attached.
+     const formData=new FormData(form),payload={};
+     for(const [name,,kind,required] of schemas.inventory.fields){
+       let value;
+       if(kind==='checkbox')value=formData.get(name)==='on';
+       else if(kind==='number'){
+         const raw=String(formData.get(name)||'').trim();
+         value=raw===''&&name==='stock'?null:Number(raw||0);
+         if(name==='preorder_lead_days'&&value===0)value=14;
+       }else value=String(formData.get(name)||'').trim();
+       if(required&&(value===''||value===null||Number.isNaN(value)))
+         throw Error('Lengkapi kolom wajib: '+name);
+       payload[name]=value;
+     }
+     if(!payload.image_url&&!payload.gallery_media&&files.length)
+       throw Error('URL gambar tidak berhasil disiapkan.');
+     const currentSku=editing?.sku||payload.sku;
+     if(!currentSku)throw Error('SKU produk tidak ditemukan.');
+     if(editing)delete payload.sku;
+     payload.updated_at=new Date().toISOString();
+     save.textContent='Menautkan foto ke produk…';
+     const command=editing
+       ?db.from('gn_inventory').update(payload).eq('sku',currentSku)
+       :db.from('gn_inventory').insert(payload);
+     const {data,error}=await command.select('sku,image_url,gallery_media');
+     if(error)throw Error('Database menolak penyimpanan: '+(error.message||'Tidak diketahui'));
+     if(!Array.isArray(data)||data.length!==1||data[0].sku!==currentSku)
+       throw Error('Database tidak mengonfirmasi produk '+currentSku+'. Foto belum ditautkan.');
+     if(data[0].image_url!==payload.image_url||data[0].gallery_media!==payload.gallery_media)
+       throw Error('Galeri produk belum sama dengan data yang dikirim. Simpan lagi.');
+     queuedFiles=[];uploadedUrls.clear();recoveredUrls.clear();
+     $('#editorDialog').close();
+     notify('Foto dan data '+currentSku+' berhasil disimpan');
+     await loadView('inventory');
+   }catch(error){
+     const canRetry=uploadedUrls.size?' Foto yang sudah terunggah tetap tersimpan; cukup klik Simpan lagi, tidak perlu upload ulang.':'';
+     const message='Inventori: '+(error.message||'Gagal menyimpan')+canRetry;
+     if(saveStatus){saveStatus.hidden=false;saveStatus.textContent=message;}
+     notify(message,true);
+   }finally{
+     save.disabled=false;save.textContent='Simpan perubahan';
+   }
  },true);
 })();
