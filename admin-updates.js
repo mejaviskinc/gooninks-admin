@@ -178,7 +178,10 @@
      cover.innerHTML='<input type="checkbox" id="gnUseCover" '+(!row?.image_url?'checked':'')+'> Jadikan foto pertama sebagai foto utama';
      const gallery=document.createElement('div');gallery.id='gnUploadPreview';gallery.className='gn-upload-preview';
      const options=document.createElement('div');options.className='gn-upload-options';
-     options.append(count,cover,gallery);uploadField.after(options);
+     const saveStatus=document.createElement('p');saveStatus.id='gnMediaSaveStatus';
+     saveStatus.className='gn-media-save-status';saveStatus.setAttribute('role','status');
+     saveStatus.setAttribute('aria-live','polite');saveStatus.hidden=true;
+     options.append(count,cover,gallery,saveStatus);uploadField.after(options);
      // Manual URL fields are advanced settings, not a second uploader.
      const main=$('#field_image_url')?.closest('.field');
      const media=$('#field_gallery_media')?.closest('.field');
@@ -277,6 +280,8 @@
    const form=event.currentTarget,save=$('#saveButton');
    if(save.disabled)return;
    save.disabled=true;save.textContent='Menyimpan…';
+   const saveStatus=$('#gnMediaSaveStatus');
+   if(saveStatus){saveStatus.hidden=true;saveStatus.textContent='';}
    try{
      const category=$('#field_category');
      if(category?.value===ADD_NEW){
@@ -356,7 +361,9 @@
      await loadView('inventory');
    }catch(error){
      const canRetry=uploadedUrls.size?' Foto yang sudah terunggah tetap tersimpan; cukup klik Simpan lagi, tidak perlu upload ulang.':'';
-     notify('Inventori: '+(error.message||'Gagal menyimpan')+canRetry,true);
+     const message='Inventori: '+(error.message||'Gagal menyimpan')+canRetry;
+     if(saveStatus){saveStatus.hidden=false;saveStatus.textContent=message;}
+     notify(message,true);
    }finally{
      save.disabled=false;save.textContent='Simpan perubahan';
    }
