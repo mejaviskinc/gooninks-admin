@@ -3,7 +3,7 @@ const dom=new JSDOM(fs.readFileSync('index.html','utf8').replace(/<script[\s\S]*
 const run=s=>vm.runInContext(s,ctx);const $=s=>w.document.querySelector(s);const click=s=>$(s).click();const tick=()=>new Promise(r=>setTimeout(r,10));const fill=(s,v)=>$(s).value=v;const submit=()=> $('dialog[open] form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
 (async()=>{
 run(fs.readFileSync('gn-config.js','utf8'));run(fs.readFileSync('admin.js','utf8').replace('events();initTurnstile();boot();','events();'));
-run("window.testData={gn_orders:[{order_id:'PAID',customer_name:'Pembeli Lunas',customer_email:'buyer@example.test',status:'paid',amount:300000,created_at:'2026-11-05',deleted_at:null,items:[]},{order_id:'PENDING',customer_name:'Belum Bayar',status:'pending',created_at:'2026-11-05',deleted_at:null},{order_id:'DELETED',customer_name:'Dihapus',status:'paid',deleted_at:'2026-11-05'}],gn_shipments:[{order_id:'PAID',status:'packing'},{order_id:'PENDING',status:'awaiting_payment'},{order_id:'DELETED',status:'packing'}],gn_customer_profiles:[],gn_notification_reads:[],gn_leads:[{id:'lead1',name:'Lead Baru',stage:'new',created_at:'2026-11-05'}],gn_product_categories:[{name:'Wastra'},{name:'Tenun'}],gn_inventory:[{sku:'LOW',stock:1,low_stock_threshold:3,archived:false,product_name:'Batik',price:250000,image_url:'https://media.test/old-cover.webp',gallery_media:'https://media.test/old-gallery.webp',visible:true,category:'Wastra',preorder:false,preorder_lead_days:14}]};window.failRead=false;\n db={from(table){let filters=[],operation=null,payload=null;const q={select(columns){if(table==='gn_shipments'&&columns.includes('!inner'))q.join=true;return q},order(){return q},limit(){return q},eq(k,v){filters.push(x=>k.includes('.')?x[k.split('.')[0]]?.[k.split('.')[1]]===v:x[k]===v);return q},is(k,v){filters.push(x=>k.includes('.')?x[k.split('.')[0]]?.[k.split('.')[1]]===v:x[k]===v);return q},not(k,op,v){filters.push(x=>x[k]!==v);return q},insert(p){operation='insert';payload=p;return q},upsert(p){operation='upsert';payload=p;return q},update(p){operation='update';payload=p;return q},then(resolve){if(operation==='update'){const selected=testData[table].filter(x=>filters.every(f=>f(x)));selected.forEach(x=>Object.assign(x,payload));return Promise.resolve({data:selected,error:null}).then(resolve)}if(operation){if(table==='gn_notification_reads'&&window.failRead)return Promise.resolve({error:{message:'Simulasi gagal'}}).then(resolve);const key=table==='gn_customer_profiles'?'email':'notification_key';const existing=testData[table].find(x=>x[key]===payload[key]);if(existing&&operation==='insert')return Promise.resolve({error:{code:'23505'}}).then(resolve);if(existing)Object.assign(existing,payload);else testData[table].push(payload);return Promise.resolve({data:[payload],error:null}).then(resolve)}return Promise.resolve({data:testData[table].map(x=>q.join?{...x,_order:testData.gn_orders.find(o=>o.order_id===x.order_id)}:x).filter(x=>filters.every(f=>f(x))),error:null}).then(resolve)}};return q}};\n currentUser={id:'admin-test',email:'admin@example.test'};currentRole='owner';document.querySelector('#appShell').hidden=false;document.querySelector('#authScreen').hidden=true;");
+run("window.testData={gn_orders:[{order_id:'PAID',customer_name:'Pembeli Lunas',customer_email:'buyer@example.test',status:'paid',amount:300000,created_at:'2026-11-05',deleted_at:null,items:[]},{order_id:'PENDING',customer_name:'Belum Bayar',status:'pending',created_at:'2026-11-05',deleted_at:null},{order_id:'DELETED',customer_name:'Dihapus',status:'paid',deleted_at:'2026-11-05'}],gn_shipments:[{order_id:'PAID',status:'packing'},{order_id:'PENDING',status:'awaiting_payment'},{order_id:'DELETED',status:'packing'}],gn_customer_profiles:[],gn_notification_reads:[],gn_leads:[{id:'lead1',name:'Lead Baru',stage:'new',created_at:'2026-11-05'}],gn_product_categories:[{name:'Wastra'},{name:'Tenun'}],gn_inventory:[{sku:'LOW',stock:1,low_stock_threshold:3,archived:false,product_name:'Batik',price:250000,image_url:'https://media.test/old-cover.webp',gallery_media:'https://media.test/old-gallery.webp',visible:true,category:'Wastra',preorder:false,preorder_lead_days:14}]};window.failRead=false;window.failInventoryUpdate=false;\n db={from(table){let filters=[],operation=null,payload=null;const q={select(columns){if(table==='gn_shipments'&&columns.includes('!inner'))q.join=true;return q},order(){return q},limit(){return q},eq(k,v){filters.push(x=>k.includes('.')?x[k.split('.')[0]]?.[k.split('.')[1]]===v:x[k]===v);return q},is(k,v){filters.push(x=>k.includes('.')?x[k.split('.')[0]]?.[k.split('.')[1]]===v:x[k]===v);return q},not(k,op,v){filters.push(x=>x[k]!==v);return q},insert(p){operation='insert';payload=p;return q},upsert(p){operation='upsert';payload=p;return q},update(p){operation='update';payload=p;return q},then(resolve){if(operation==='update'){if(table==='gn_inventory'&&window.failInventoryUpdate)return Promise.resolve({data:[],error:{message:'Simulasi DB menolak penyimpanan'}}).then(resolve);const selected=testData[table].filter(x=>filters.every(f=>f(x)));selected.forEach(x=>Object.assign(x,payload));return Promise.resolve({data:selected,error:null}).then(resolve)}if(operation){if(table==='gn_notification_reads'&&window.failRead)return Promise.resolve({error:{message:'Simulasi gagal'}}).then(resolve);const key=table==='gn_customer_profiles'?'email':'notification_key';const existing=testData[table].find(x=>x[key]===payload[key]);if(existing&&operation==='insert')return Promise.resolve({error:{code:'23505'}}).then(resolve);if(existing)Object.assign(existing,payload);else testData[table].push(payload);return Promise.resolve({data:[payload],error:null}).then(resolve)}return Promise.resolve({data:testData[table].map(x=>q.join?{...x,_order:testData.gn_orders.find(o=>o.order_id===x.order_id)}:x).filter(x=>filters.every(f=>f(x))),error:null}).then(resolve)}};return q}};\n currentUser={id:'admin-test',email:'admin@example.test'};currentRole='owner';document.querySelector('#appShell').hidden=false;document.querySelector('#authScreen').hidden=true;");
 
 for(const f of ['admin-plus.js','admin-updates.js','admin-reports.js','admin-tracking.js'])run(fs.readFileSync(f,'utf8'));
 run("testData.gn_leads.push({id:'manual1',name:'Pemesan WhatsApp',email:'manual-order@example.test',phone:'081277788899',interest:'Permintaan pembelian GoO Ninks',source:'website',stage:'contacted',created_at:'2026-11-06'})");
@@ -64,13 +64,22 @@ db.storage={
   from(){
     return {
       upload: async function(path,file){window.uploadedNames.push(file.name);return {error:null}},
+      list: async function(folder){return {data:[{name:'orphan.png',created_at:new Date().toISOString()}],error:null}},
       getPublicUrl: function(path){return {data:{publicUrl:'https://media.test/'+path}}}
     };
   }
 };`);
+w.failInventoryUpdate=true;
 submit();
 await new Promise(r=>setTimeout(r,100));
-assert.equal($('#editorDialog').open,false,'multiple uploads and database save must close the editor');
+assert.equal($('#editorDialog').open,true,'failed database save must not close the editor');
+assert.match($('#gnMediaSaveStatus').textContent,/Simulasi DB menolak penyimpanan/);
+assert.equal(w.uploadedNames.length,3,'photos were uploaded before the rejected save');
+w.failInventoryUpdate=false;
+submit();
+await new Promise(r=>setTimeout(r,100));
+assert.equal($('#editorDialog').open,false,'retry must attach media and close the editor');
+assert.equal(w.uploadedNames.length,3,'retry must not upload duplicates');
 assert.deepEqual(Array.from(w.uploadedNames),['primary.png','extra.png','third.png']);
 assert.equal(run('testData.gn_inventory[0].image_url'),'https://media.test/old-cover.webp');
 const savedGallery=run('testData.gn_inventory[0].gallery_media');
@@ -88,5 +97,19 @@ submit();await new Promise(r=>setTimeout(r,100));
 assert.match(run('testData.gn_inventory[0].image_url'),/inventory\/uuid-4.png/);
 assert.match(run('testData.gn_inventory[0].gallery_media'),/old-cover.webp/,'previous main image must stay available in gallery');
 assert.equal($('#editorDialog').open,false);
+await run("loadView('inventory')");
+click('#records [data-edit="LOW"]');await tick();
+const recovery=$('#gnRecoveryPanel');
+assert.ok(recovery,'recovery must be inside the one upload panel');
+recovery.open=true;recovery.dispatchEvent(new w.Event('toggle'));
+await new Promise(r=>setTimeout(r,50));
+assert.equal($('#gnRecoveryPanel .gn-recovery-item')?.tagName,'BUTTON','orphan recovery item must be selectable');
+click('#gnRecoveryPanel .gn-recovery-item');
+assert.match($('#gnRecoveryPanel .gn-recovery-message').textContent,/1 foto/);
+const uploadsBefore=w.uploadedNames.length;
+submit();await new Promise(r=>setTimeout(r,100));
+assert.equal($('#editorDialog').open,false);
+assert.match(run('testData.gn_inventory[0].gallery_media'),/orphan.png/,'recovered photo must attach to the selected SKU');
+assert.equal(w.uploadedNames.length,uploadsBefore,'recovery must not upload files again');
 console.log('PASS: manual customer create/edit/duplicate; notification decrease/persistence/error/zero; paid-only shipping excludes pending and deleted; merged packing and tracking with legacy alias');dom.window.close();
 })().catch(e=>{console.error(e);dom.window.close();process.exit(1)});
