@@ -67,7 +67,7 @@ assert.deepEqual(Array.from(w.uploadedNames),['primary.png','extra.png','third.p
 assert.equal(run('testData.gn_inventory[0].image_url'),'https://media.test/old-cover.webp');
 const savedGallery=run('testData.gn_inventory[0].gallery_media');
 assert.match(savedGallery,/old-gallery.webp/);
-assert.equal(savedGallery.split('\\n').length,4,'all three new images should be saved in gallery');
+assert.equal(savedGallery.split('\n').length,4,'all three new images should be saved in gallery');
 await run("loadView('inventory')");
 click('#records [data-edit="LOW"]');await tick();
 assert.equal($('#gnUseCover').checked,false);
@@ -77,7 +77,7 @@ const nextInput=$('#editorDialog [name="gnMultiUpload"]');
 Object.defineProperty(nextInput,'files',{value:newCover,configurable:true});
 nextInput.dispatchEvent(new w.Event('change'));
 submit();await new Promise(r=>setTimeout(r,100));
-assert.match(run('testData.gn_inventory[0].image_url'),/inventory\\/uuid-4.png/);
+assert.match(run('testData.gn_inventory[0].image_url'),/inventory\/uuid-4.png/);
 assert.match(run('testData.gn_inventory[0].gallery_media'),/old-cover.webp/,'previous main image must stay available in gallery');
 assert.equal($('#editorDialog').open,false);
 console.log('PASS: manual customer create/edit/duplicate; notification decrease/persistence/error/zero; paid-only shipping excludes pending and deleted; merged packing and tracking with legacy alias');dom.window.close();
