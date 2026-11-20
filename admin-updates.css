@@ -20,3 +20,13 @@
 .gn-media-manual summary{cursor:pointer;font-size:12px;font-weight:650;color:#596553}
 .gn-media-manual>.field,.gn-media-manual>.gn-studio-tool{margin:12px 0}
 .gn-media-manual .field textarea,.gn-media-manual .field input{max-width:100%}
+
+/* Photo recovery reuses the same upload panel, without an additional file input. */
+.gn-recovery-panel{margin:12px 0 0;border:1px solid #dfe5db;border-radius:7px;padding:11px;background:#fbfcf9}
+.gn-recovery-panel summary{cursor:pointer;font-size:12px;font-weight:650;color:#34563b}
+.gn-recovery-panel p{margin:8px 0;font-size:11px;color:#6b7568;line-height:1.6}
+.gn-recovery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:9px;max-height:320px;overflow:auto}
+.gn-recovery-item{padding:5px;background:white;border:2px solid #e4e8df;border-radius:6px;cursor:pointer;min-width:0}
+.gn-recovery-item img{display:block;width:100%;height:99px;object-fit:cover;border-radius:3px}
+.gn-recovery-item small{display:block;padding-top:4px;font-size:10px}
+.gn-recovery-item.is-selected{border-color:#316c4f;background:#e9f3ec}
