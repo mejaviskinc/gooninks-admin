@@ -59,7 +59,15 @@ assert.equal($('#gnUploadPreview').children.length,3);
 assert.equal($('#gnUseCover').checked,false,'editing should not replace an existing cover by default');
 $('#field_category').value='Wastra';$('#field_category').dispatchEvent(new w.Event('change'));
 w.crypto.randomUUID=(()=>{let n=0;return ()=>'uuid-'+(++n)})();
-run("window.uploadedNames=[];db.storage={from(){return{upload:async (path,file)=>{window.uploadedNames.push(file.name);return {error:null}},getPublicUrl:path=>({data:{publicUrl:'https://media.test/'+path}})}}}}");
+run(`window.uploadedNames=[];
+db.storage={
+  from(){
+    return {
+      upload: async function(path,file){window.uploadedNames.push(file.name);return {error:null}},
+      getPublicUrl: function(path){return {data:{publicUrl:'https://media.test/'+path}}}
+    };
+  }
+};`);
 submit();
 await new Promise(r=>setTimeout(r,100));
 assert.equal($('#editorDialog').open,false,'multiple uploads and database save must close the editor');
