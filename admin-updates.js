@@ -89,6 +89,8 @@
  const ADD_NEW='__gn_category_add_new__';
  let previewUrls=[];
  let queuedFiles=[];
+ let existingMedia=[];
+ const removedExisting=new Set();
  const uploadedUrls=new Map();
  const fileKey=f=>[f.name,f.size,f.lastModified,f.type].join(':');
  function addFiles(input){
@@ -154,11 +156,49 @@
      node.append(media,caption,remove);grid.append(node);
    }
  }
+ function renderExistingMedia(){
+   const grid=$('#gnExistingMedia'),summary=$('#gnExistingCount');
+   if(!grid||!summary)return;
+   const remaining=existingMedia.filter(item=>!removedExisting.has(item.url)).length;
+   summary.textContent=existingMedia.length
+     ?remaining+' foto tersimpan · '+removedExisting.size+' akan dihapus'
+     :'Belum ada foto tersimpan';
+   grid.replaceChildren();
+   existingMedia.forEach((item,index)=>{
+     const removed=removedExisting.has(item.url);
+     const card=document.createElement('div');
+     card.className='gn-preview-item gn-existing-item';
+     card.classList.toggle('gn-existing-removed',removed);
+     const video=/\.(mp4|webm|mov)(?:[?#]|$)/i.test(item.url);
+     const media=document.createElement(video?'video':'img');
+     if(/^https?:\/\//i.test(item.url)){
+       media.src=item.url;
+       if(video)media.preload='metadata';
+       else media.alt=item.cover?'Foto utama tersimpan':'Foto galeri tersimpan';
+     }
+     const caption=document.createElement('small');
+     caption.textContent=(item.cover?'Foto utama':'Foto galeri '+index)+(removed?' · Akan dihapus':'');
+     const action=document.createElement('button');
+     action.type='button';
+     action.className='gn-preview-remove';
+     action.textContent=removed?'Urungkan':'Hapus foto';
+     action.setAttribute('aria-label',(removed?'Urungkan hapus foto tersimpan ':'Hapus foto tersimpan ')+(index+1));
+     action.addEventListener('click',()=>{
+       if(removed)removedExisting.delete(item.url);else removedExisting.add(item.url);
+       renderExistingMedia();
+     });
+     card.append(media,caption,action);grid.append(card);
+   });
+ }
  const previousOpen=openEditor;
  openEditor=function(row=null){
-   revokePreviews();queuedFiles=[];uploadedUrls.clear();
+   revokePreviews();queuedFiles=[];uploadedUrls.clear();removedExisting.clear();
    previousOpen(row);
    if(currentView!=='inventory')return;
+   const originalCover=String(row?.image_url||'').trim();
+   const originalGallery=String(row?.gallery_media||'').split(/\r?\n/).map(url=>url.trim()).filter(Boolean);
+   existingMedia=[...new Set([originalCover,...originalGallery].filter(Boolean))]
+     .map(url=>({url,cover:url===originalCover}));
 
    // Existing uploader from Admin Plus remains; the former single-image input
    // is prevented by setting the image_url schema kind to URL above.
@@ -175,11 +215,21 @@
      const cover=document.createElement('label');cover.className='gn-cover-choice';
      cover.innerHTML='<input type="checkbox" id="gnUseCover" '+(!row?.image_url?'checked':'')+'> Jadikan foto pertama sebagai foto utama';
      const gallery=document.createElement('div');gallery.id='gnUploadPreview';gallery.className='gn-upload-preview';
+     const existingTitle=document.createElement('p');existingTitle.className='gn-existing-title';
+     existingTitle.textContent='Foto yang sudah tersimpan';
+     const existingHint=document.createElement('p');existingHint.className='gn-existing-hint';
+     existingHint.textContent='Pilih Hapus foto, lalu klik Simpan perubahan. Bisa diurungkan sebelum disimpan.';
+     const existingCount=document.createElement('div');existingCount.id='gnExistingCount';
+     existingCount.className='gn-upload-counter';existingCount.setAttribute('role','status');
+     existingCount.setAttribute('aria-live','polite');
+     const existingGrid=document.createElement('div');existingGrid.id='gnExistingMedia';
+     existingGrid.className='gn-upload-preview gn-existing-media';
      const options=document.createElement('div');options.className='gn-upload-options';
      const saveStatus=document.createElement('p');saveStatus.id='gnMediaSaveStatus';
      saveStatus.className='gn-media-save-status';saveStatus.setAttribute('role','status');
      saveStatus.setAttribute('aria-live','polite');saveStatus.hidden=true;
-     options.append(count,cover,gallery,saveStatus);uploadField.after(options);
+     options.append(existingTitle,existingHint,existingCount,existingGrid,count,cover,gallery,saveStatus);
+     uploadField.after(options);
      // Preserve existing values for saving without displaying other photo entry paths.
      const main=$('#field_image_url')?.closest('.field');
      const media=$('#field_gallery_media')?.closest('.field');
@@ -189,6 +239,7 @@
        hiddenFields.append(main,media);options.after(hiddenFields);
      }
      input.addEventListener('change',()=>addFiles(input));
+     renderExistingMedia();
      renderUploadPreview();
    }
    const select=$('#field_category');
@@ -244,12 +295,13 @@
          throw Error('Periksa format/ukuran file: '+file.name);
      }
      const gallery=$('#field_gallery_media');
-     const previous=String(gallery?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+     const previous=String(gallery?.value||'').split(/\r?\n/)
+       .map(x=>x.trim()).filter(url=>url&&!removedExisting.has(url));
      const main=$('#field_image_url');
      const previousCover=String(main?.value||'').trim();
-     const wantCover=Boolean($('#gnUseCover')?.checked||!previousCover);
+     let nextCover=removedExisting.has(previousCover)?'':previousCover;
+     const wantCover=Boolean($('#gnUseCover')?.checked||!nextCover);
      const cover=wantCover?files.find(file=>file.type.startsWith('image/')):null;
-     let nextCover=previousCover;
      for(let i=0;i<files.length;i++){
        const file=files[i],key=fileKey(file);
        save.textContent='Mengunggah '+(i+1)+'/'+files.length+'…';
@@ -258,8 +310,13 @@
        if(file===cover)nextCover=url;
        else previous.push(url);
      }
-     if(nextCover!==previousCover&&previousCover)previous.unshift(previousCover);
-     const finalGallery=[...new Set(previous.filter(url=>url&&url!==nextCover))].join('\n');
+     if(!nextCover){
+       const replacementIndex=previous.findIndex(url=>!/\.(mp4|webm|mov)(?:[?#]|$)/i.test(url));
+       if(replacementIndex>=0)nextCover=previous.splice(replacementIndex,1)[0];
+     }
+     if(nextCover!==previousCover&&previousCover&&!removedExisting.has(previousCover))
+       previous.unshift(previousCover);
+     const finalGallery=[...new Set(previous.filter(url=>url&&url!==nextCover&&!removedExisting.has(url)))].join('\n');
      if(main)main.value=nextCover;
      if(gallery)gallery.value=finalGallery;
      if($('#field_archived')?.checked)$('#field_visible').checked=false;
@@ -296,9 +353,10 @@
        throw Error('Database tidak mengonfirmasi produk '+currentSku+'. Foto belum ditautkan.');
      if(data[0].image_url!==payload.image_url||data[0].gallery_media!==payload.gallery_media)
        throw Error('Galeri produk belum sama dengan data yang dikirim. Simpan lagi.');
-     queuedFiles=[];uploadedUrls.clear();
+     const removedCount=removedExisting.size;
+     queuedFiles=[];uploadedUrls.clear();removedExisting.clear();
      $('#editorDialog').close();
-     notify('Foto dan data '+currentSku+' berhasil disimpan');
+     notify('Foto dan data '+currentSku+' berhasil disimpan'+(removedCount?' · '+removedCount+' foto dihapus dari produk':''));
      await loadView('inventory');
    }catch(error){
      const canRetry=uploadedUrls.size?' Foto yang sudah terunggah tetap tersimpan; cukup klik Simpan lagi, tidak perlu upload ulang.':'';
