@@ -3,6 +3,9 @@
    Works with existing Admin Plus. Auth/RLS remain enforced by Supabase. */
 (()=>{
  const $=selector=>document.querySelector(selector);
+ const productNameIndex=schemas.inventory.fields.findIndex(field=>field[0]==='product_name');
+ if(!schemas.inventory.fields.some(field=>field[0]==='description'))
+   schemas.inventory.fields.splice(productNameIndex+1,0,['description','Deskripsi produk','textarea',false]);
  const categoryField=schemas.inventory.fields.find(field=>field[0]==='image_url');
  // Keep the URL field for manual editing, but only one file-upload input.
  categoryField[1]='Foto utama (URL; terisi otomatis saat unggah)';
@@ -195,6 +198,8 @@
    revokePreviews();queuedFiles=[];uploadedUrls.clear();removedExisting.clear();
    previousOpen(row);
    if(currentView!=='inventory')return;
+   const description=$('#field_description');
+   if(description){description.rows=6;description.placeholder='Tulis detail produk, bahan, potongan, dan perawatan…';}
    const originalCover=String(row?.image_url||'').trim();
    const originalGallery=String(row?.gallery_media||'').split(/\r?\n/).map(url=>url.trim()).filter(Boolean);
    existingMedia=[...new Set([originalCover,...originalGallery].filter(Boolean))]
@@ -343,16 +348,18 @@
      if(!currentSku)throw Error('SKU produk tidak ditemukan.');
      if(editing)delete payload.sku;
      payload.updated_at=new Date().toISOString();
-     save.textContent='Menautkan foto ke produk…';
+     save.textContent='Menyimpan data produk…';
      const command=editing
        ?db.from('gn_inventory').update(payload).eq('sku',currentSku)
        :db.from('gn_inventory').insert(payload);
-     const {data,error}=await command.select('sku,image_url,gallery_media');
+     const {data,error}=await command.select('sku,image_url,gallery_media,description');
      if(error)throw Error('Database menolak penyimpanan: '+(error.message||'Tidak diketahui'));
      if(!Array.isArray(data)||data.length!==1||data[0].sku!==currentSku)
        throw Error('Database tidak mengonfirmasi produk '+currentSku+'. Foto belum ditautkan.');
      if(data[0].image_url!==payload.image_url||data[0].gallery_media!==payload.gallery_media)
        throw Error('Galeri produk belum sama dengan data yang dikirim. Simpan lagi.');
+     if(data[0].description!==payload.description)
+       throw Error('Deskripsi produk belum sama dengan data yang dikirim. Simpan lagi.');
      const removedCount=removedExisting.size;
      queuedFiles=[];uploadedUrls.clear();removedExisting.clear();
      $('#editorDialog').close();
