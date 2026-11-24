@@ -294,21 +294,36 @@ function openCustomerDialog(record=null){
  customerDialog.showModal();
 }
 const bell=document.createElement('div');bell.className='gn-notif-wrap';
-bell.innerHTML='<button type="button" class="gn-notif-bell" aria-label="Lihat notifikasi" aria-expanded="false" aria-controls="gnNotifPop" id="gnNotifBell"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span id="gnNotifCount" hidden>0</span></button><div class="gn-notif-pop" id="gnNotifPop" hidden><h3>Notifikasi terbaru</h3><div id="gnNotifList">Memuat…</div></div>';
+bell.innerHTML='<button type="button" class="gn-notif-bell" aria-label="Lihat notifikasi" aria-expanded="false" aria-controls="gnNotifPop" id="gnNotifBell"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg><span id="gnNotifCount" hidden>0</span></button><div class="gn-notif-pop" id="gnNotifPop" hidden><h3>Notifikasi terbaru</h3><button type="button" id="gnNotifReadAll" class="gn-notif-read-all" disabled>Tandai semua terbaca</button><div id="gnNotifList">Memuat…</div></div>';
 document.querySelector('.top-actions')?.prepend(bell);
 const bellBtn=bell.querySelector('button'),pop=bell.querySelector('#gnNotifPop'),count=bell.querySelector('#gnNotifCount');
-let notificationItems=[],readKeys=new Set(),notificationUser=null,notificationLoading=false;
+const readAllBtn=bell.querySelector('#gnNotifReadAll');
+ let notificationItems=[],readKeys=new Set(),notificationUser=null,notificationLoading=false,markingAll=false;
 function paintNotifications(){
  const unread=notificationItems.filter(item=>!readKeys.has(item.key));
  count.textContent=String(unread.length);count.hidden=unread.length===0;
+  readAllBtn.disabled=notificationLoading||markingAll||!unread.length;
  bellBtn.setAttribute('aria-label',unread.length+' notifikasi belum dibaca');
  bell.querySelector('#gnNotifList').innerHTML=notificationItems.length?notificationItems.map(item=>'<button type="button" class="gn-notif-item '+(readKeys.has(item.key)?'is-read':'is-unread')+'" data-notification-key="'+safe(item.key)+'">'+safe(item.title)+'<small>'+rowdate(item.date)+(readKeys.has(item.key)?' · Sudah dibaca':' · Belum dibaca')+'</small></button>').join(''):'<p>Tidak ada notifikasi yang perlu ditindaklanjuti.</p>';
 }
 bellBtn.addEventListener('click',()=>{pop.hidden=!pop.hidden;bellBtn.setAttribute('aria-expanded',String(!pop.hidden));if(!pop.hidden)void refreshNotifications()});
 document.addEventListener('click',event=>{if(!bell.contains(event.target)){pop.hidden=true;bellBtn.setAttribute('aria-expanded','false')}});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!pop.hidden){pop.hidden=true;bellBtn.setAttribute('aria-expanded','false');bellBtn.focus()}});
-pop.addEventListener('click',async event=>{
- const button=event.target.closest('[data-notification-key]');if(!button||button.disabled||!currentUser)return;
+readAllBtn.addEventListener('click',async()=>{
+  if(!currentUser||notificationLoading||markingAll)return;
+  const userId=currentUser.id,items=notificationItems.filter(item=>!readKeys.has(item.key));
+  if(!items.length)return;
+  markingAll=true;readAllBtn.disabled=true;readAllBtn.textContent='Menandai…';
+  try{
+   const readAt=new Date().toISOString();
+   const {error}=await db.from('gn_notification_reads').upsert(items.map(item=>({user_id:userId,notification_key:item.key,read_at:readAt})),{onConflict:'user_id,notification_key'});
+   if(error)throw error;
+   if(currentUser?.id!==userId)return;
+   items.forEach(item=>readKeys.add(item.key));notify('Semua notifikasi ditandai terbaca');
+  }catch(error){notify('Gagal menandai notifikasi: '+error.message,true)}finally{markingAll=false;readAllBtn.textContent='Tandai semua terbaca';if(currentUser?.id===userId)paintNotifications();else void refreshNotifications();}
+ });
+ pop.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-notification-key]');if(!button||button.disabled||!currentUser||markingAll)return;
  const item=notificationItems.find(x=>x.key===button.dataset.notificationKey);if(!item)return;
  const userId=currentUser.id;button.disabled=true;
  try{
@@ -321,8 +336,8 @@ pop.addEventListener('click',async event=>{
  }catch(error){notify('Gagal menandai notifikasi: '+error.message,true)}finally{button.disabled=false}
 });
 async function refreshNotifications(){
- if(!db||!currentUser||notificationLoading)return;
- const userId=currentUser.id;notificationLoading=true;
+ if(!db||!currentUser||notificationLoading||markingAll)return;
+ const userId=currentUser.id;notificationLoading=true;readAllBtn.disabled=true;
  if(notificationUser!==userId){notificationUser=userId;readKeys=new Set();notificationItems=[];paintNotifications()}
  try{
  const [r,l,p,reads]=await Promise.all([
@@ -337,7 +352,7 @@ async function refreshNotifications(){
  const low=(p.data||[]).filter(x=>x.stock!==null&&x.stock<=x.low_stock_threshold);
  notificationItems=[...(r.data||[]).map(x=>({key:'order:'+x.order_id+':pending',title:'Pesanan menunggu bayar: '+x.customer_name,date:x.created_at,view:'orders'})),...(l.data||[]).map(x=>({key:'lead:'+x.id+':new',title:'Lead baru: '+x.name,date:x.created_at,view:'leads'})),...low.map(x=>({key:'stock:'+x.sku+':'+x.stock,title:'Stok menipis: '+x.product_name,date:null,view:'inventory'}))];
  paintNotifications();
- }catch(err){console.warn('Notifications unavailable:',err.message);bell.querySelector('#gnNotifList').textContent='Gagal memuat notifikasi. Buka kembali untuk mencoba lagi.'}finally{notificationLoading=false}
+ }catch(err){console.warn('Notifications unavailable:',err.message);bell.querySelector('#gnNotifList').textContent='Gagal memuat notifikasi. Buka kembali untuk mencoba lagi.'}finally{notificationLoading=false;readAllBtn.disabled=markingAll||!notificationItems.some(item=>!readKeys.has(item.key))}
 }
 
 /* Reconcile pending payments only after querying Midtrans from the authenticated server.

@@ -346,15 +346,16 @@
        throw Error('URL gambar tidak berhasil disiapkan.');
      const currentSku=editing?.sku||payload.sku;
      if(!currentSku)throw Error('SKU produk tidak ditemukan.');
-     if(editing)delete payload.sku;
+     if(payload.sku.length<2||payload.sku.length>80)throw Error('Kode produk wajib 2 sampai 80 karakter.');
+      const newSku=payload.sku;
      payload.updated_at=new Date().toISOString();
      save.textContent='Menyimpan data produk…';
      const command=editing
        ?db.from('gn_inventory').update(payload).eq('sku',currentSku)
        :db.from('gn_inventory').insert(payload);
      const {data,error}=await command.select('sku,image_url,gallery_media,description');
-     if(error)throw Error('Database menolak penyimpanan: '+(error.message||'Tidak diketahui'));
-     if(!Array.isArray(data)||data.length!==1||data[0].sku!==currentSku)
+     if(error){if(error.code==='23505')throw Error('Kode produk sudah digunakan. Pilih kode lain.');throw Error('Database menolak penyimpanan: '+(error.message||'Tidak diketahui'));}
+     if(!Array.isArray(data)||data.length!==1||data[0].sku!==newSku)
        throw Error('Database tidak mengonfirmasi produk '+currentSku+'. Foto belum ditautkan.');
      if(data[0].image_url!==payload.image_url||data[0].gallery_media!==payload.gallery_media)
        throw Error('Galeri produk belum sama dengan data yang dikirim. Simpan lagi.');
@@ -363,7 +364,7 @@
      const removedCount=removedExisting.size;
      queuedFiles=[];uploadedUrls.clear();removedExisting.clear();
      $('#editorDialog').close();
-     notify('Foto dan data '+currentSku+' berhasil disimpan'+(removedCount?' · '+removedCount+' foto dihapus dari produk':''));
+     notify('Foto dan data '+newSku+' berhasil disimpan'+(removedCount?' · '+removedCount+' foto dihapus dari produk':''));
      await loadView('inventory');
    }catch(error){
      const canRetry=uploadedUrls.size?' Foto yang sudah terunggah tetap tersimpan; cukup klik Simpan lagi, tidak perlu upload ulang.':'';

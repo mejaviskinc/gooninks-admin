@@ -44,3 +44,5 @@
 
 /* Keep the notification panel above positioned dashboard cards, below mobile navigation. */
 .topbar{position:relative;z-index:10}
+
+.gn-notif-read-all{display:block;margin:0 0 8px auto;padding:7px 10px;border:1px solid #ddd8ca;border-radius:5px;background:#fff;color:#304333;font:600 12px/1.4 system-ui;cursor:pointer}.gn-notif-read-all:disabled{opacity:.45;cursor:default}.gn-notif-read-all:focus-visible{outline:2px solid #ab8462;outline-offset:2px}
